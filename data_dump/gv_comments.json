@@ -1,0 +1,32 @@
+[
+  {
+    "id": "5f24d6d3-e388-4545-8515-871612fd871d",
+    "body": "I agree with this. It is a very important topic!",
+    "author_id": "d3add051-bba9-428f-bb6d-1cc36fa7440e",
+    "idea_id": "2385e717-3dae-4e07-b2ba-597a60315cf4",
+    "parent_id": null,
+    "created_at": "2026-01-29T17:38:15.345Z",
+    "updated_at": "2026-02-05T18:46:15.257Z",
+    "body_updated_at": null,
+    "likes_count": 0,
+    "dislikes_count": 0,
+    "children_count": 0,
+    "publication_status": "deleted",
+    "project_id": "ee66d45a-b2db-42bc-9015-e8dd0bf06714"
+  },
+  {
+    "id": "beca4563-0d26-4912-bb2f-32cbc09d7f47",
+    "body": "I agree, this is an important topic ",
+    "author_id": null,
+    "idea_id": "4e581faa-504f-4575-b2e7-d74636b804ea",
+    "parent_id": null,
+    "created_at": "2026-01-29T16:24:16.461Z",
+    "updated_at": "2026-02-03T12:20:05.246Z",
+    "body_updated_at": null,
+    "likes_count": 0,
+    "dislikes_count": 0,
+    "children_count": 0,
+    "publication_status": "deleted",
+    "project_id": "ee66d45a-b2db-42bc-9015-e8dd0bf06714"
+  }
+]

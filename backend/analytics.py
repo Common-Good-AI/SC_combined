@@ -1,0 +1,540 @@
+"""Phase 2a analytics — high-level metrics computed from in-memory store.
+
+Every public function reads from ``data_store.store`` (dict[str, DataFrame])
+and returns a plain dict ready to be JSON-serialised by Flask.
+
+Participant taxonomy
+--------------------
+1. **Confirmed users** – have a verified account in GoVocal; their email
+   exists in ``gv_users``.
+2. **Email-only users** – provided an email on a GoVocal idea (via
+   ``custom_field_values.u_email_*``) or on a Typeform response, but that
+   email does **not** appear in ``gv_users``.
+3. **Anonymous users** – submitted a GoVocal survey or Typeform response
+   with **no** email at all.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from typing import Any
+
+import pandas as pd
+
+from backend.config import Config
+from backend.data_store import store
+
+log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+# Column names that may contain an email directly on a GV idea object
+# (populated via custom_field_values during ingestion by pd.json_normalize).
+_GV_IDEA_EMAIL_COLS: list[str] = [
+    "custom_field_values.u_email_5vp",
+    "custom_field_values.u_email_rzm",
+]
+
+
+def _normalise_emails(series: pd.Series) -> pd.Series:
+    """Lowercase, strip, and remove blanks / NaN from an email column."""
+    return (
+        series
+        .dropna()
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .loc[lambda s: s.ne("") & s.ne("nan") & s.ne("none")]
+    )
+
+
+def _emails_from_gv_ideas_via_users(df: pd.DataFrame) -> pd.Series:
+    """Join gv_ideas (or a subset) to gv_users to resolve author_id → email."""
+    if df.empty or "author_id" not in df.columns:
+        return pd.Series(dtype=str)
+    users = store.get("gv_users")
+    if users is None or "email" not in users.columns:
+        return pd.Series(dtype=str)
+    merged = df[["author_id"]].merge(
+        users[["id", "email"]].rename(columns={"id": "author_id"}),
+        on="author_id",
+        how="left",
+    )
+    return _normalise_emails(merged["email"])
+
+
+def _emails_from_gv_idea_custom_fields(df: pd.DataFrame) -> set[str]:
+    """Extract emails stored directly on idea objects (custom_field_values)."""
+    emails: set[str] = set()
+    if df.empty:
+        return emails
+    for col in _GV_IDEA_EMAIL_COLS:
+        if col in df.columns:
+            emails.update(_normalise_emails(df[col]).tolist())
+    return emails
+
+
+def _emails_from_gv_reactions(df: pd.DataFrame, idea_ids: set[str] | None = None) -> pd.Series:
+    """Resolve reaction user_id → email, optionally filtering by reactable_id."""
+    if df.empty:
+        return pd.Series(dtype=str)
+    if idea_ids is not None and "reactable_id" in df.columns:
+        df = df[df["reactable_id"].isin(idea_ids)]
+    if df.empty or "user_id" not in df.columns:
+        return pd.Series(dtype=str)
+    users = store.get("gv_users")
+    if users is None or "email" not in users.columns:
+        return pd.Series(dtype=str)
+    merged = df[["user_id"]].merge(
+        users[["id", "email"]].rename(columns={"id": "user_id"}),
+        on="user_id",
+        how="left",
+    )
+    return _normalise_emails(merged["email"])
+
+
+def _tf_emails(df: pd.DataFrame) -> pd.Series:
+    """Get normalised emails from a Typeform DataFrame (email or hidden_email)."""
+    if df.empty:
+        return pd.Series(dtype=str)
+    if "email" in df.columns:
+        return _normalise_emails(df["email"])
+    if "hidden_email" in df.columns:
+        return _normalise_emails(df["hidden_email"])
+    return pd.Series(dtype=str)
+
+
+def _all_tf_frames() -> list[pd.DataFrame]:
+    """Return all Typeform DataFrames from the store."""
+    return [df for key, df in store.items() if key.startswith("tf_")]
+
+
+def _all_tf_frames_with_keys() -> list[tuple[str, pd.DataFrame]]:
+    """Return (key, DataFrame) pairs for all Typeform DataFrames."""
+    return [(key, df) for key, df in store.items() if key.startswith("tf_")]
+
+
+def _get_confirmed_emails() -> set[str]:
+    """Return the set of confirmed user emails from gv_users."""
+    users = store.get("gv_users")
+    if users is None or "email" not in users.columns:
+        return set()
+    return set(_normalise_emails(users["email"]).tolist())
+
+
+def _row_has_no_email(row: pd.Series) -> bool:
+    """Return True when a GV idea row has no email anywhere."""
+    for col in _GV_IDEA_EMAIL_COLS:
+        if col in row.index:
+            val = row[col]
+            if pd.notna(val) and str(val).strip().lower() not in ("", "nan", "none"):
+                return False
+    return True
+
+
+def _count_gv_ideas_anonymous(df: pd.DataFrame) -> int:
+    """Count GV idea rows that have NO author_id AND no email in custom fields."""
+    if df.empty or "author_id" not in df.columns:
+        return 0
+    null_author = df[df["author_id"].isna()]
+    if null_author.empty:
+        return 0
+    return int(null_author.apply(_row_has_no_email, axis=1).sum())
+
+
+def _count_tf_anonymous(df: pd.DataFrame) -> int:
+    """Count Typeform rows with no email at all."""
+    if df.empty:
+        return 0
+    if "email" in df.columns:
+        blank = (
+            df["email"].isna()
+            | df["email"].astype(str).str.strip().eq("")
+            | df["email"].astype(str).str.strip().str.lower().eq("nan")
+        )
+        return int(blank.sum())
+    if "hidden_email" in df.columns:
+        blank = (
+            df["hidden_email"].isna()
+            | df["hidden_email"].astype(str).str.strip().eq("")
+            | df["hidden_email"].astype(str).str.strip().str.lower().eq("nan")
+        )
+        return int(blank.sum())
+    # No email column → every row is anonymous
+    return len(df)
+
+
+# ---------------------------------------------------------------------------
+# 1. Total participants (3-tier model)
+# ---------------------------------------------------------------------------
+
+def compute_total_participants() -> dict[str, Any]:
+    """Compute participants in three tiers:
+
+    1. **Confirmed users** — unique emails in ``gv_users``.
+    2. **Email-only users** — emails found on GV idea custom fields or
+       Typeform responses that are **not** in ``gv_users``.
+    3. **Anonymous users** — GV survey / Typeform submissions with no email.
+
+    ``total = confirmed + email_only + anonymous``
+    """
+    # --- Tier 1: Confirmed users ---
+    confirmed_emails = _get_confirmed_emails()
+
+    # --- Tier 2: Email-only users ---
+    # Collect every email that appears on an action (idea custom fields + TF)
+    action_emails: set[str] = set()
+
+    # GV ideas — emails in custom_field_values
+    gv_ideas = store.get("gv_ideas", pd.DataFrame())
+    if not gv_ideas.empty:
+        action_emails.update(_emails_from_gv_idea_custom_fields(gv_ideas))
+
+    # Typeform
+    for tf_df in _all_tf_frames():
+        action_emails.update(set(_tf_emails(tf_df).tolist()))
+
+    email_only_emails = action_emails - confirmed_emails
+    email_only_count = len(email_only_emails)
+
+    # --- Tier 3: Anonymous users ---
+    anon_breakdown: dict[str, int] = {}
+
+    # GV surveys — null author_id AND no email in custom fields
+    gv_survey = store.get("gv_ideas_survey", pd.DataFrame())
+    anon_breakdown["govocal_surveys"] = _count_gv_ideas_anonymous(gv_survey)
+
+    # GV ideation — null author_id AND no email in custom fields
+    gv_ideation = store.get("gv_ideas_ideation", pd.DataFrame())
+    anon_breakdown["govocal_ideation"] = _count_gv_ideas_anonymous(gv_ideation)
+
+    # Typeform
+    for key, tf_df in _all_tf_frames_with_keys():
+        anon_breakdown[key] = _count_tf_anonymous(tf_df)
+
+    anonymous_count = sum(anon_breakdown.values())
+
+    confirmed_count = len(confirmed_emails)
+    total = confirmed_count + email_only_count + anonymous_count
+
+    return {
+        "total": total,
+        "confirmed_users": confirmed_count,
+        "email_only_users": email_only_count,
+        "anonymous_users": anonymous_count,
+        "anonymous_breakdown": anon_breakdown,
+        "detail": {
+            "total_emails_on_ideas": len(
+                _emails_from_gv_idea_custom_fields(gv_ideas) if not gv_ideas.empty else set()
+            ),
+            "total_emails_on_typeform": len(action_emails - _emails_from_gv_idea_custom_fields(gv_ideas) if not gv_ideas.empty else action_emails),
+            "overlap_action_emails_and_confirmed": len(action_emails & confirmed_emails),
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# 2. Total actions
+# ---------------------------------------------------------------------------
+
+def compute_total_actions() -> dict[str, Any]:
+    """An action = survey submit OR idea submit OR GoVocal reaction."""
+    # Survey submits: GV survey-type ideas + all Typeform rows
+    gv_survey_count = len(store.get("gv_ideas_survey", pd.DataFrame()))
+    tf_count = sum(len(df) for df in _all_tf_frames())
+    survey_submits = gv_survey_count + tf_count
+
+    # Ideas submitted (ideation type in GV)
+    ideas_submitted = len(store.get("gv_ideas_ideation", pd.DataFrame()))
+
+    # Reactions
+    reactions = len(store.get("gv_reactions", pd.DataFrame()))
+
+    return {
+        "survey_submits": survey_submits,
+        "survey_submits_breakdown": {
+            "govocal_surveys": gv_survey_count,
+            "typeform_surveys": tf_count,
+        },
+        "ideas_submitted": ideas_submitted,
+        "reactions": reactions,
+        "total": survey_submits + ideas_submitted + reactions,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 3. Conversion rates (Typeform + GoVocal, kept separate)
+# ---------------------------------------------------------------------------
+
+def compute_conversion_rate() -> dict[str, Any]:
+    """Two separate conversion rates:
+
+    **Typeform conversion rate**
+        Typeform emails that also exist in gv_users  /  total Typeform submissions
+        → "what % of Typeform submissions came from confirmed GoVocal users"
+
+    **GoVocal conversion rate**
+        GoVocal survey emails that also exist in gv_users  /  total GoVocal survey submissions
+        → "what % of GoVocal survey submissions came from confirmed GoVocal users"
+    """
+    confirmed_emails = _get_confirmed_emails()
+
+    # --- Typeform ---
+    tf_total_submissions = 0
+    tf_emails_all: set[str] = set()
+    for tf_df in _all_tf_frames():
+        tf_total_submissions += len(tf_df)
+        tf_emails_all.update(set(_tf_emails(tf_df).tolist()))
+
+    tf_emails_in_gv = tf_emails_all & confirmed_emails
+    tf_rate = (
+        (len(tf_emails_in_gv) / tf_total_submissions * 100)
+        if tf_total_submissions else 0.0
+    )
+
+    # --- GoVocal surveys ---
+    gv_survey = store.get("gv_ideas_survey", pd.DataFrame())
+    gv_survey_total = len(gv_survey)
+
+    # Collect all emails from GoVocal surveys (author_id→users + custom fields)
+    gv_survey_emails: set[str] = set()
+    if not gv_survey.empty:
+        gv_survey_emails.update(
+            set(_emails_from_gv_ideas_via_users(gv_survey).tolist())
+        )
+        gv_survey_emails.update(_emails_from_gv_idea_custom_fields(gv_survey))
+    gv_survey_emails.discard("")
+
+    gv_emails_in_users = gv_survey_emails & confirmed_emails
+    gv_rate = (
+        (len(gv_emails_in_users) / gv_survey_total * 100)
+        if gv_survey_total else 0.0
+    )
+
+    return {
+        "typeform": {
+            "total_submissions": tf_total_submissions,
+            "emails_in_govocal_users": len(tf_emails_in_gv),
+            "conversion_rate_pct": round(tf_rate, 2),
+        },
+        "govocal": {
+            "total_submissions": gv_survey_total,
+            "emails_in_govocal_users": len(gv_emails_in_users),
+            "conversion_rate_pct": round(gv_rate, 2),
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# 4. Idea selection breakdown (Typeform question)
+# ---------------------------------------------------------------------------
+
+def _find_idea_question_column(df: pd.DataFrame) -> str | None:
+    """Find the column whose title matches the idea-selection question."""
+    pattern = Config.TF_IDEA_QUESTION_PATTERN
+    for col in df.columns:
+        if re.search(pattern, col):
+            return col
+    return None
+
+
+def compute_idea_selection_breakdown() -> dict[str, Any]:
+    """Which ideas were selected most across all Typeform survey responses.
+
+    Looks at the question matching TF_IDEA_QUESTION_PATTERN across all TF
+    forms (which are duplicates).  Multi-choice answers are comma-separated.
+    """
+    all_selections: list[str] = []
+    matched_column: str | None = None
+
+    for tf_df in _all_tf_frames():
+        if tf_df.empty:
+            continue
+        col = _find_idea_question_column(tf_df)
+        if col is None:
+            continue
+        matched_column = col
+        raw = tf_df[col].dropna().astype(str)
+        for val in raw:
+            val = val.strip()
+            if val:
+                all_selections.append(val)
+
+    if not all_selections:
+        return {
+            "question_title": matched_column,
+            "total_responses": 0,
+            "selections": [],
+            "note": "No matching question found or no selections recorded.",
+        }
+
+    counts = pd.Series(all_selections).value_counts()
+    total = int(counts.sum())
+    selections = [
+        {
+            "idea": idea,
+            "count": int(cnt),
+            "percentage": round(cnt / total * 100, 2),
+        }
+        for idea, cnt in counts.items()
+    ]
+
+    return {
+        "question_title": matched_column,
+        "total_responses": total,
+        "selections": selections,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 5. Participation breakdown (3-tier model)
+# ---------------------------------------------------------------------------
+
+def _source_participation_gv_ideas(label: str, df: pd.DataFrame) -> dict:
+    """Per-source participation for a GV ideas DataFrame (surveys or ideation).
+
+    Uses 3-tier model:
+    - confirmed:  emails resolved via author_id → gv_users
+                  + emails in custom fields that ARE in gv_users
+    - email_only: emails in custom fields NOT in gv_users
+    - anonymous:  rows with null author_id AND no email in custom fields
+    """
+    if df.empty:
+        return {
+            "source": label, "actions": 0,
+            "confirmed_users": 0, "email_only_users": 0, "anonymous_users": 0,
+        }
+
+    confirmed_emails = _get_confirmed_emails()
+    actions = len(df)
+
+    # All emails from this source: author_id→users + custom field emails
+    source_emails: set[str] = set()
+    source_emails.update(set(_emails_from_gv_ideas_via_users(df).tolist()))
+    source_emails.update(_emails_from_gv_idea_custom_fields(df))
+    source_emails.discard("")
+
+    confirmed = len(source_emails & confirmed_emails)
+    email_only = len(source_emails - confirmed_emails)
+    anonymous = _count_gv_ideas_anonymous(df)
+
+    return {
+        "source": label,
+        "actions": actions,
+        "confirmed_users": confirmed,
+        "email_only_users": email_only,
+        "anonymous_users": anonymous,
+    }
+
+
+def _source_participation_gv_reactions(label: str, df: pd.DataFrame) -> dict:
+    """Per-source participation for GV reactions.
+
+    Reactions only have user_id (→ gv_users).  No custom field emails.
+    Rows with null user_id are anonymous.
+    """
+    if df.empty:
+        return {
+            "source": label, "actions": 0,
+            "confirmed_users": 0, "email_only_users": 0, "anonymous_users": 0,
+        }
+
+    confirmed_emails = _get_confirmed_emails()
+    actions = len(df)
+
+    # All reaction emails come from gv_users → they are confirmed by definition
+    reaction_emails = set(_emails_from_gv_reactions(df).tolist())
+    reaction_emails.discard("")
+    confirmed = len(reaction_emails & confirmed_emails)
+    # Reactions don't carry custom-field emails, so email_only = 0
+    email_only = 0
+    anonymous = int(df["user_id"].isna().sum()) if "user_id" in df.columns else 0
+
+    return {
+        "source": label,
+        "actions": actions,
+        "confirmed_users": confirmed,
+        "email_only_users": email_only,
+        "anonymous_users": anonymous,
+    }
+
+
+def _source_participation_tf(label: str, df: pd.DataFrame) -> dict:
+    """Per-source participation for a single Typeform DataFrame."""
+    if df.empty:
+        return {
+            "source": label, "actions": 0,
+            "confirmed_users": 0, "email_only_users": 0, "anonymous_users": 0,
+        }
+
+    confirmed_emails = _get_confirmed_emails()
+    actions = len(df)
+
+    tf_email_set = set(_tf_emails(df).tolist())
+    tf_email_set.discard("")
+    confirmed = len(tf_email_set & confirmed_emails)
+    email_only = len(tf_email_set - confirmed_emails)
+    anonymous = _count_tf_anonymous(df)
+
+    return {
+        "source": label,
+        "actions": actions,
+        "confirmed_users": confirmed,
+        "email_only_users": email_only,
+        "anonymous_users": anonymous,
+    }
+
+
+def compute_participation_breakdown() -> dict[str, Any]:
+    """Per-source and overall participation using the 3-tier model."""
+
+    sources: list[dict] = []
+
+    # GV surveys
+    gv_surveys = store.get("gv_ideas_survey", pd.DataFrame())
+    sources.append(_source_participation_gv_ideas("govocal_surveys", gv_surveys))
+
+    # GV ideation
+    gv_ideation = store.get("gv_ideas_ideation", pd.DataFrame())
+    sources.append(_source_participation_gv_ideas("govocal_ideation", gv_ideation))
+
+    # GV reactions
+    gv_reactions = store.get("gv_reactions", pd.DataFrame())
+    sources.append(_source_participation_gv_reactions("govocal_reactions", gv_reactions))
+
+    # Typeform (per form)
+    for key, tf_df in _all_tf_frames_with_keys():
+        sources.append(_source_participation_tf(key, tf_df))
+
+    # Overall (use the deduplicated compute_total_participants)
+    totals = compute_total_participants()
+    total_actions = compute_total_actions()
+
+    return {
+        "per_source": sources,
+        "overall": {
+            "total_actions": total_actions["total"],
+            "confirmed_users": totals["confirmed_users"],
+            "email_only_users": totals["email_only_users"],
+            "anonymous_users": totals["anonymous_users"],
+            "total_participants": totals["total"],
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# All-in-one summary
+# ---------------------------------------------------------------------------
+
+def compute_all() -> dict[str, Any]:
+    """Return every Phase 2a metric in a single payload."""
+    return {
+        "total_participants": compute_total_participants(),
+        "total_actions": compute_total_actions(),
+        "conversion_rate": compute_conversion_rate(),
+        "idea_selection_breakdown": compute_idea_selection_breakdown(),
+        "participation_breakdown": compute_participation_breakdown(),
+    }
