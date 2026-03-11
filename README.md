@@ -15,6 +15,7 @@ A Flask-based backend that aggregates civic-engagement data from **GoVocal** and
   - [General](#general)
   - [Data](#data)
   - [Analytics](#analytics)
+  - [Ideas](#ideas)
 - [Deployment](#deployment)
 
 ---
@@ -37,7 +38,7 @@ On the first request the app fetches all configured projects/forms, normalises e
 - **Survey → Deliberation conversion** — tracks which survey respondents also participated in the deliberation/ideation project.
 - **Idea-selection breakdown** — aggregates Typeform multi-choice answers matching a configurable question pattern.
 - **Per-source participation breakdown** — actions and participants broken down by GoVocal surveys, GoVocal ideation, GoVocal reactions, and each Typeform form.
-- **Unified demographics** — merges age, zipcode, political lean, and race from GoVocal custom fields and Typeform responses into a single table keyed by email.
+- **Unified demographics** — merges age, zipcode, political lean, and race from GoVocal custom fields (users and idea submissions) and Typeform survey responses into a single table keyed by email with canonical column names (`email`, `age`, `race`, `zipcode`, `political_lean`, `source`).
 
 ---
 
@@ -68,7 +69,7 @@ On the first request the app fetches all configured projects/forms, normalises e
 3. `GoVocalClient` authenticates via JWT and paginates through all endpoints.
 4. `TypeformClient` fetches form definitions, then cursor-paginates responses and flattens each answer by field title.
 5. Raw JSON is normalised into pandas DataFrames and stored in the module-level `store` dict.
-6. A unified demographics DataFrame is built by joining emails across sources.
+6. A unified demographics DataFrame is built by mapping source-specific column names to canonical names (`age`, `race`, `zipcode`, `political_lean`) and merging across all sources by email.
 7. Analytics functions in `analytics.py` read from `store` on every request and return plain dicts.
 
 ---
@@ -85,6 +86,7 @@ On the first request the app fetches all configured projects/forms, normalises e
 │   ├── config.py              # Centralised config from env vars
 │   ├── data_store.py          # Data ingestion, in-memory store, refresh logic
 │   ├── analytics.py           # Phase 2a analytics computations
+│   ├── idea_analytics.py      # Per-idea view with reactions & demographics
 │   └── api_client/
 │       ├── __init__.py
 │       ├── gv_api.py          # GoVocal REST API client (JWT + pagination)
@@ -320,6 +322,54 @@ Per-source breakdown of actions and participants, plus overall totals.
   }
 }
 ```
+
+---
+
+### Ideas
+
+#### `GET /api/ideas`
+
+Unified view of every ideation idea, sorted by total reactions (descending). Each entry includes metadata, author demographics, reaction totals, and per-demographic breakdowns of upvotes/downvotes.
+
+```json
+[
+  {
+    "idea_id": "abc-123",
+    "title": "Expand public transit",
+    "body": "Plain-text body of the idea…",
+    "project_id": "ee66d45a-…",
+    "created_at": "2026-01-15T08:30:00Z",
+    "author_demographics": {
+      "age_bucket": "35-44",
+      "race": "White",
+      "zipcode": "30301",
+      "political_lean": "Somewhat Liberal"
+    },
+    "reactions": {
+      "total": 42,
+      "upvotes": 38,
+      "downvotes": 4,
+      "demographic_breakdown": {
+        "age_bucket": {
+          "upvotes": { "25-34": 12, "35-44": 10, "18-24": 8, "…": "…" },
+          "downvotes": { "55-64": 2, "45-54": 2 }
+        },
+        "race": { "upvotes": { "…": "…" }, "downvotes": { "…": "…" } },
+        "political_lean": { "upvotes": { "…": "…" }, "downvotes": { "…": "…" } },
+        "zipcode": { "upvotes": { "…": "…" }, "downvotes": { "…": "…" } }
+      }
+    }
+  }
+]
+```
+
+#### `GET /api/ideas/<idea_id>`
+
+Returns a single idea with the same shape as above. Returns `404` if the idea is not found.
+
+| Parameter | Location | Description |
+|---|---|---|
+| `idea_id` | URL path | GoVocal idea UUID |
 
 ---
 

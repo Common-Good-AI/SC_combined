@@ -1,0 +1,3152 @@
+[
+  {
+    "zipcode": "29001",
+    "county": "Clarendon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29002",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29003",
+    "county": "Bamberg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29006",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29009",
+    "county": "Kershaw",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29010",
+    "county": "Lee",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29014",
+    "county": "Chester",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29015",
+    "county": "Fairfield",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29016",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29018",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29020",
+    "county": "Kershaw",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29021",
+    "county": "Kershaw",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29030",
+    "county": "Calhoun",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29031",
+    "county": "Union",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29032",
+    "county": "Kershaw",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29033",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29036",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29037",
+    "county": "Newberry",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29038",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29039",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29040",
+    "county": "Sumter",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29041",
+    "county": "Clarendon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29042",
+    "county": "Bamberg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29044",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29045",
+    "county": "Kershaw",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29046",
+    "county": "Lee",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29047",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29048",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29051",
+    "county": "Clarendon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29052",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29053",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29054",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29055",
+    "county": "Chester",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29056",
+    "county": "Williamsburg",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29058",
+    "county": "Lancaster",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29059",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29061",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29062",
+    "county": "Sumter",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29063",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29065",
+    "county": "Fairfield",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29067",
+    "county": "Lancaster",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29069",
+    "county": "Darlington",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29070",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29071",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29072",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29073",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29074",
+    "county": "Kershaw",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29075",
+    "county": "Newberry",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29078",
+    "county": "Kershaw",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29079",
+    "county": "Darlington",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29080",
+    "county": "Lee",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29081",
+    "county": "Bamberg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29082",
+    "county": "Colleton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29101",
+    "county": "Chesterfield",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29102",
+    "county": "Clarendon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29104",
+    "county": "Sumter",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29105",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29107",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29108",
+    "county": "Newberry",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29111",
+    "county": "Clarendon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29112",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29113",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29114",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29115",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29116",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29117",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29118",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29122",
+    "county": "Newberry",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29123",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29125",
+    "county": "Sumter",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29126",
+    "county": "Newberry",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29127",
+    "county": "Newberry",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29128",
+    "county": "Sumter",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29129",
+    "county": "Saluda",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29130",
+    "county": "Fairfield",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29132",
+    "county": "Fairfield",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29133",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29135",
+    "county": "Calhoun",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29137",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29138",
+    "county": "Saluda",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29142",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29143",
+    "county": "Clarendon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29145",
+    "county": "Newberry",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29146",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29147",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29148",
+    "county": "Clarendon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29150",
+    "county": "Sumter",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29151",
+    "county": "Sumter",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29152",
+    "county": "Sumter",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29153",
+    "county": "Sumter",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29154",
+    "county": "Sumter",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29160",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29161",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29162",
+    "county": "Clarendon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29163",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29164",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29166",
+    "county": "Saluda",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29168",
+    "county": "Sumter",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29169",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29170",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29171",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29172",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29175",
+    "county": "Kershaw",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29177",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29178",
+    "county": "Newberry",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29180",
+    "county": "Fairfield",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29201",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29202",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29203",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29204",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29205",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29206",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29207",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29208",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29209",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29210",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29211",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29212",
+    "county": "Lexington",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29214",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29215",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29216",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29217",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29218",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29219",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29220",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29221",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29222",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29223",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29224",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29225",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29226",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29227",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29228",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29229",
+    "county": "Richland",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29301",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29302",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29303",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29304",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29305",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29306",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29307",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29316",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29319",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29320",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29321",
+    "county": "Union",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29322",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29323",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29324",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29325",
+    "county": "Laurens",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29329",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29330",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29331",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29332",
+    "county": "Laurens",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29333",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29334",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29335",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29336",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29338",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29340",
+    "county": "Cherokee",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29341",
+    "county": "Cherokee",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29342",
+    "county": "Cherokee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29346",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29348",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29349",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29351",
+    "county": "Laurens",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29353",
+    "county": "Union",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29355",
+    "county": "Newberry",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29356",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29360",
+    "county": "Laurens",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29364",
+    "county": "Union",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29365",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29368",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29369",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29370",
+    "county": "Laurens",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29372",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29373",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29374",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29375",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29376",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29377",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29378",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29379",
+    "county": "Union",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29384",
+    "county": "Laurens",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29385",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29386",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29388",
+    "county": "Spartanburg",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29395",
+    "county": "Union",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29401",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29402",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29403",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29404",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29405",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29406",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29407",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29409",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29410",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29412",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29413",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29414",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29416",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29418",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29419",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29420",
+    "county": "Dorchester",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29422",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29423",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29424",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29425",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29426",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29429",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29431",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29432",
+    "county": "Orangeburg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29433",
+    "county": "Colleton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29434",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29435",
+    "county": "Dorchester",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29436",
+    "county": "Colleton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29437",
+    "county": "Bamberg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29438",
+    "county": "Colleton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29439",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29440",
+    "county": "Georgetown",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29441",
+    "county": "Georgetown",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29442",
+    "county": "Georgetown",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29445",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29446",
+    "county": "Colleton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29447",
+    "county": "Dorchester",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29448",
+    "county": "Dorchester",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29449",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29450",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29451",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29452",
+    "county": "Colleton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29453",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29455",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29456",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29457",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29458",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29461",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29464",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29465",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29466",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29468",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29469",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29470",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29471",
+    "county": "Dorchester",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29472",
+    "county": "Dorchester",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29474",
+    "county": "Colleton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29475",
+    "county": "Colleton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29476",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29477",
+    "county": "Dorchester",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29479",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29480",
+    "county": "Colleton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29481",
+    "county": "Colleton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29482",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29483",
+    "county": "Dorchester",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29484",
+    "county": "Dorchester",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29485",
+    "county": "Dorchester",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29486",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29487",
+    "county": "Charleston",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29488",
+    "county": "Colleton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29492",
+    "county": "Berkeley",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29493",
+    "county": "Colleton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29501",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29502",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29503",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29504",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29505",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29506",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29510",
+    "county": "Georgetown",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29511",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29512",
+    "county": "Marlboro",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29516",
+    "county": "Marlboro",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29518",
+    "county": "Williamsburg",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29519",
+    "county": "Marion",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29520",
+    "county": "Chesterfield",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29525",
+    "county": "Chesterfield",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29526",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29527",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29528",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29530",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29532",
+    "county": "Darlington",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29536",
+    "county": "Dillon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29540",
+    "county": "Darlington",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29541",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29543",
+    "county": "Dillon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29544",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29545",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29546",
+    "county": "Marion",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29547",
+    "county": "Dillon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29550",
+    "county": "Darlington",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29551",
+    "county": "Darlington",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29554",
+    "county": "Williamsburg",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29555",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29556",
+    "county": "Williamsburg",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29560",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29563",
+    "county": "Dillon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29564",
+    "county": "Williamsburg",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29565",
+    "county": "Dillon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29566",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29567",
+    "county": "Dillon",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29568",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29569",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29570",
+    "county": "Marlboro",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29571",
+    "county": "Marion",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29572",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29574",
+    "county": "Marion",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29575",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29576",
+    "county": "Georgetown",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29577",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29578",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29579",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29580",
+    "county": "Williamsburg",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29581",
+    "county": "Marion",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29582",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29583",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29584",
+    "county": "Chesterfield",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29585",
+    "county": "Georgetown",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29587",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29588",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29589",
+    "county": "Marion",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29590",
+    "county": "Williamsburg",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29591",
+    "county": "Florence",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29592",
+    "county": "Marion",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29593",
+    "county": "Darlington",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29594",
+    "county": "Marlboro",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29596",
+    "county": "Marlboro",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29597",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29598",
+    "county": "Horry",
+    "region": "Pee Dee",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29601",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29602",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29603",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29604",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29605",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29606",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29607",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29608",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29609",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29610",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29611",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29612",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29613",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29614",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29615",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29616",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29617",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29620",
+    "county": "Abbeville",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29621",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29622",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29623",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29624",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29625",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29626",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29627",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29628",
+    "county": "Abbeville",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29630",
+    "county": "Pickens",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29631",
+    "county": "Pickens",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29632",
+    "county": "Pickens",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29633",
+    "county": "Pickens",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29634",
+    "county": "Pickens",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29635",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29636",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29638",
+    "county": "Abbeville",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29639",
+    "county": "Abbeville",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29640",
+    "county": "Pickens",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29641",
+    "county": "Pickens",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29642",
+    "county": "Pickens",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29643",
+    "county": "Oconee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29644",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29645",
+    "county": "Laurens",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29646",
+    "county": "Greenwood",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29647",
+    "county": "Greenwood",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29648",
+    "county": "Greenwood",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29649",
+    "county": "Greenwood",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29650",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29651",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29652",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29653",
+    "county": "Greenwood",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29654",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29655",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29656",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29657",
+    "county": "Pickens",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29658",
+    "county": "Oconee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29659",
+    "county": "Abbeville",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29661",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29662",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29664",
+    "county": "Oconee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29665",
+    "county": "Oconee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29666",
+    "county": "Greenwood",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29667",
+    "county": "Pickens",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29669",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29670",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29671",
+    "county": "Pickens",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29672",
+    "county": "Oconee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29673",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29675",
+    "county": "Oconee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29676",
+    "county": "Oconee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29677",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29678",
+    "county": "Oconee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29679",
+    "county": "Oconee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29680",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29681",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29682",
+    "county": "Pickens",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29683",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29684",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29685",
+    "county": "Pickens",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29686",
+    "county": "Oconee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29687",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29688",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29689",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29690",
+    "county": "Greenville",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29691",
+    "county": "Oconee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29692",
+    "county": "Greenwood",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29693",
+    "county": "Oconee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29695",
+    "county": "Greenwood",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29696",
+    "county": "Oconee",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29697",
+    "county": "Anderson",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29702",
+    "county": "Cherokee",
+    "region": "Upstate",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29703",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29704",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29706",
+    "county": "Chester",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29707",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29708",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29709",
+    "county": "Chesterfield",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29710",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29712",
+    "county": "Chester",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29714",
+    "county": "Chester",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29715",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29716",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29717",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29718",
+    "county": "Chesterfield",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29720",
+    "county": "Lancaster",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29721",
+    "county": "Lancaster",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29722",
+    "county": "Lancaster",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29724",
+    "county": "Chester",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29726",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29727",
+    "county": "Chesterfield",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29728",
+    "county": "Chesterfield",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29729",
+    "county": "Chester",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29730",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29731",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29732",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29733",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29734",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29741",
+    "county": "Chesterfield",
+    "region": "Pee Dee",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29742",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29743",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29745",
+    "county": "York",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29801",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29802",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29803",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29804",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29805",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29808",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29809",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29810",
+    "county": "Allendale",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29812",
+    "county": "Barnwell",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29813",
+    "county": "Barnwell",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29816",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29817",
+    "county": "Barnwell",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29819",
+    "county": "Greenwood",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29821",
+    "county": "McCormick",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29822",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29824",
+    "county": "Edgefield",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29826",
+    "county": "Barnwell",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29827",
+    "county": "Allendale",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29828",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29829",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29831",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29832",
+    "county": "Edgefield",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29834",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29835",
+    "county": "McCormick",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29836",
+    "county": "Allendale",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29838",
+    "county": "McCormick",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29839",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29840",
+    "county": "McCormick",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29841",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29842",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29843",
+    "county": "Bamberg",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29844",
+    "county": "McCormick",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29845",
+    "county": "McCormick",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29846",
+    "county": "Allendale",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29847",
+    "county": "Edgefield",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29848",
+    "county": "Greenwood",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29849",
+    "county": "Allendale",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29850",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29851",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29853",
+    "county": "Barnwell",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29856",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29860",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29861",
+    "county": "Aiken",
+    "region": "Midlands",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29899",
+    "county": "McCormick",
+    "region": "Upstate",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29901",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29902",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29903",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29904",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29905",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29906",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29907",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29909",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29910",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29911",
+    "county": "Hampton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29912",
+    "county": "Jasper",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29914",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29915",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29916",
+    "county": "Hampton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29918",
+    "county": "Hampton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29920",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29921",
+    "county": "Hampton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29922",
+    "county": "Hampton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29923",
+    "county": "Hampton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29924",
+    "county": "Hampton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29925",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29926",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29927",
+    "county": "Jasper",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29928",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29929",
+    "county": "Colleton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29931",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29932",
+    "county": "Hampton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29933",
+    "county": "Hampton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29934",
+    "county": "Jasper",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29935",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29936",
+    "county": "Jasper",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29939",
+    "county": "Hampton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29940",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29941",
+    "county": "Beaufort",
+    "region": "Lowcountry",
+    "urban_rural": "Urban"
+  },
+  {
+    "zipcode": "29943",
+    "county": "Jasper",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29944",
+    "county": "Hampton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  },
+  {
+    "zipcode": "29945",
+    "county": "Hampton",
+    "region": "Lowcountry",
+    "urban_rural": "Rural"
+  }
+]

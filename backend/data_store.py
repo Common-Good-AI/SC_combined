@@ -181,48 +181,107 @@ def _ingest_typeform(tf: TypeformClient) -> dict[str, pd.DataFrame]:
 
 # ── Unified demographics ─────────────────────────────────────────────────
 
+# Column mappings: source-specific column → canonical name
+_GV_USER_DEMO_MAP: dict[str, str] = {
+    "custom_field_values.age_peq": "age",
+    "custom_field_values.race_2sy": "race",
+    "custom_field_values.zipcode_ny9": "zipcode",
+    "custom_field_values.political_lean_l7k": "political_lean",
+}
+
+_GV_IDEA_DEMO_MAP: dict[str, str] = {
+    "custom_field_values.u_email_5vp": "email",
+    "custom_field_values.u_email_rzm": "email_alt",
+    "custom_field_values.u_age_peq": "age",
+    "custom_field_values.u_race_2sy": "race",
+    "custom_field_values.u_zipcode_ny9": "zipcode",
+    "custom_field_values.u_political_lean_l7k": "political_lean",
+}
+
+_TF_DEMO_MAP: dict[str, str] = {
+    "First of all, how old are you?": "age",
+    "What is your race?": "race",
+    "What's your *zipcode*?": "zipcode",
+    "How would you describe your political views?": "political_lean",
+}
+
+_CANONICAL_COLS = ["email", "age", "zipcode", "political_lean", "race", "source"]
+
+
+def _rename_and_select(df: pd.DataFrame, col_map: dict[str, str],
+                       source_label: str) -> pd.DataFrame:
+    """Rename source-specific columns to canonical names and select only those."""
+    rename = {k: v for k, v in col_map.items() if k in df.columns}
+    tmp = df.rename(columns=rename).copy()
+    tmp["source"] = source_label
+    cols = [c for c in _CANONICAL_COLS if c in tmp.columns]
+    return tmp[cols]
+
+
 def _build_unified_demographics() -> pd.DataFrame:
-    """Merge demographics from all loaded sources, keyed by email."""
-    demo_cols = ["email", "age", "zipcode", "political_lean", "race", "source"]
+    """Merge demographics from all loaded sources, keyed by email.
+
+    Maps source-specific column names to canonical names:
+      - gv_users:  custom_field_values.age_peq → age, etc.
+      - gv_ideas:  custom_field_values.u_email_5vp → email, u_age_peq → age, etc.
+      - typeform:  "First of all, how old are you?" → age, etc.
+    """
     parts: list[pd.DataFrame] = []
 
-    # GoVocal users
+    # ── GoVocal users ────────────────────────────────────────────────────
     if "gv_users" in store and "email" in store["gv_users"].columns:
         df = store["gv_users"].copy()
-        df["source"] = "govocal_user"
-        cols = [c for c in demo_cols if c in df.columns]
-        parts.append(df[cols])
+        part = _rename_and_select(df, _GV_USER_DEMO_MAP, "govocal_user")
+        parts.append(part)
 
-    # GoVocal ideas (author demographics baked into custom_field_values)
+    # ── GoVocal ideas (custom fields carry demographics + email) ─────────
     if "gv_ideas" in store:
         df = store["gv_ideas"].copy()
+        # Rename custom field columns to canonical names
+        rename = {k: v for k, v in _GV_IDEA_DEMO_MAP.items() if k in df.columns}
+        df = df.rename(columns=rename)
+
+        # If author_id present, join the registered user's email
         if "author_id" in df.columns and "gv_users" in store:
-            # Join email from users
-            users = store["gv_users"][["id", "email"]].rename(columns={"id": "author_id"})
+            users = store["gv_users"][["id", "email"]].rename(
+                columns={"id": "author_id", "email": "user_email"},
+            )
             df = df.merge(users, on="author_id", how="left")
+        else:
+            df["user_email"] = pd.NA
+
+        # Build a unified email: prefer user_email (registered), then
+        # custom field email, then email_alt
+        df["email"] = (
+            df.get("user_email", pd.Series(dtype="object"))
+            .combine_first(df.get("email", pd.Series(dtype="object")))
+            .combine_first(df.get("email_alt", pd.Series(dtype="object")))
+        )
+
         df["source"] = "govocal_idea"
-        cols = [c for c in demo_cols if c in df.columns]
+        cols = [c for c in _CANONICAL_COLS if c in df.columns]
         if "email" in cols:
             parts.append(df[cols])
 
-    # Typeform responses
-    for key, df in store.items():
-        if key.startswith("tf_") and "email" in df.columns:
-            tmp = df.copy()
-            tmp["source"] = f"typeform_{key[3:]}"
-            cols = [c for c in demo_cols if c in tmp.columns]
-            parts.append(tmp[cols])
+    # ── Typeform responses ───────────────────────────────────────────────
+    for key, frame in store.items():
+        if key.startswith("tf_") and "email" in frame.columns:
+            part = _rename_and_select(frame, _TF_DEMO_MAP, f"typeform_{key[3:]}")
+            parts.append(part)
 
     if not parts:
-        return pd.DataFrame(columns=demo_cols)
+        return pd.DataFrame(columns=_CANONICAL_COLS)
 
     unified = pd.concat(parts, ignore_index=True)
-    # Normalise emails for matching
+
+    # Normalise emails for deduplication
     if "email" in unified.columns:
         unified["email"] = unified["email"].astype(str).str.strip().str.lower()
         unified = unified[unified["email"].ne("") & unified["email"].ne("nan")]
 
-    log.info("Unified demographics: %d rows", len(unified))
+    log.info("Unified demographics: %d rows, %d unique emails",
+             len(unified),
+             unified["email"].nunique() if "email" in unified.columns else 0)
     return unified
 
 

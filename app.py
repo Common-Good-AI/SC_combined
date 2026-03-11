@@ -10,6 +10,7 @@ from flask import Flask, jsonify
 from backend.config import Config
 from backend.data_store import get_summary, meta, refresh_all, store
 from backend import analytics
+from backend import idea_analytics
 
 # ── Logging ──────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -90,6 +91,7 @@ def data_refresh():
     if problems:
         return jsonify({"error": "config_invalid", "problems": problems}), 400
     try:
+        idea_analytics.invalidate_cache()
         summary = refresh_all()
         return jsonify(summary)
     except Exception as exc:
@@ -161,6 +163,25 @@ def analytics_idea_selections():
 def analytics_participation_breakdown():
     """Per-source participation & action counts."""
     return jsonify(analytics.compute_participation_breakdown())
+
+
+# ── Idea analytics routes ────────────────────────────────────────────────
+
+
+@app.route("/api/ideas")
+def ideas_list():
+    """Unified idea view — all ideation ideas with reactions & demographics."""
+    result = idea_analytics.build_idea_view()
+    return jsonify(result)
+
+
+@app.route("/api/ideas/<idea_id>")
+def ideas_detail(idea_id: str):
+    """Single idea with full reaction & demographic breakdown."""
+    result = idea_analytics.build_idea_view(idea_id)
+    if result is None:
+        return jsonify({"error": f"Idea '{idea_id}' not found"}), 404
+    return jsonify(result)
 
 
 # ── Entry point ──────────────────────────────────────────────────────────
