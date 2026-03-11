@@ -11,11 +11,14 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import re
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
+from scipy.spatial.distance import jensenshannon
 
 from backend.data_store import store
 
@@ -75,6 +78,31 @@ _ZIPCODE_GEO: dict[str, dict[str, str]] = {}
 
 
 _ZIPCODE_GEO_LOADED = False
+
+# ---------------------------------------------------------------------------
+# Bridging Score Constants
+# ---------------------------------------------------------------------------
+
+# Demographic dimensions and their base weights for bridging score
+# Political lean is most important (0.4), others split evenly
+BRIDGING_DIMENSIONS: list[str] = ["political_lean", "age_bucket", "race", "region", "urban_rural"]
+BRIDGING_BASE_WEIGHTS: dict[str, float] = {
+    "political_lean": 0.40,
+    "age_bucket": 0.20,
+    "race": 0.20,
+    "region": 0.10,
+    "urban_rural": 0.10,
+}
+
+# Thresholds for bridging score confidence
+BRIDGING_MIN_KNOWN_DEMO_REACTIONS = 8   # Below this, bridging score = None (insufficient data)
+BRIDGING_FULL_CONFIDENCE_REACTIONS = 20  # At this level, demographic_confidence = 1.0
+BRIDGING_ENGAGEMENT_SCALE = 10  # k in engagement_confidence = 1 - exp(-total/k)
+
+# Cross-coalition (JSD) settings
+BRIDGING_MIN_DOWNVOTES_FOR_JSD = 5  # Need this many downvotes with known demos to compute JSD
+BRIDGING_UPVOTE_DIVERSITY_WEIGHT = 0.6  # w1 in composite when JSD is available
+BRIDGING_CROSS_COALITION_WEIGHT = 0.4   # w2 in composite when JSD is available
 
 
 def _load_zipcode_geo() -> None:
@@ -356,14 +384,75 @@ def _ensure_user_demo_cache() -> None:
     log.info("User demo cache: %d user IDs", len(_user_demo_cache))
 
 
+# ---------------------------------------------------------------------------
+# Population baseline for bridging score normalization
+# ---------------------------------------------------------------------------
+
+_population_baseline: dict[str, dict[str, float]] = {}
+_population_baseline_built = False
+
+
+def _build_population_baseline() -> None:
+    """Build the global demographic distribution across all voters with known demographics.
+
+    This is the baseline for KL/JSD-based diversity scoring. A bridging score of 1.0
+    means the idea's upvote distribution matches the overall voter population.
+    """
+    global _population_baseline, _population_baseline_built
+    if _population_baseline_built:
+        return
+    _population_baseline_built = True
+
+    _ensure_user_demo_cache()
+
+    reactions_df = store.get("gv_reactions", pd.DataFrame())
+    if reactions_df.empty:
+        log.warning("No reactions data — population baseline will be empty")
+        return
+
+    # Get unique voter user_ids (users who have reacted to at least one idea)
+    voter_ids = set()
+    if "user_id" in reactions_df.columns:
+        voter_ids = set(reactions_df["user_id"].dropna().unique())
+
+    # Collect demographic values for each dimension
+    dim_values: dict[str, list[str]] = {dim: [] for dim in BRIDGING_DIMENSIONS}
+
+    for uid in voter_ids:
+        demo = _user_demo_cache.get(uid, {})
+        for dim in BRIDGING_DIMENSIONS:
+            val = demo.get(dim)
+            if val is not None:
+                dim_values[dim].append(val)
+
+    # Convert to probability distributions
+    for dim, values in dim_values.items():
+        if not values:
+            _population_baseline[dim] = {}
+            continue
+        total = len(values)
+        counts: dict[str, int] = {}
+        for v in values:
+            counts[v] = counts.get(v, 0) + 1
+        _population_baseline[dim] = {k: v / total for k, v in counts.items()}
+
+    log.info(
+        "Population baseline built: %s",
+        {dim: len(dist) for dim, dist in _population_baseline.items()},
+    )
+
+
 def invalidate_cache() -> None:
     """Clear cached lookups (call after data refresh)."""
     global _user_demo_cache, _email_demo_cache, _userid_email_map, _ZIPCODE_GEO, _ZIPCODE_GEO_LOADED
+    global _population_baseline, _population_baseline_built
     _user_demo_cache = {}
     _email_demo_cache = {}
     _userid_email_map = {}
     _ZIPCODE_GEO = {}
     _ZIPCODE_GEO_LOADED = False
+    _population_baseline = {}
+    _population_baseline_built = False
 
 
 # ---------------------------------------------------------------------------
@@ -399,6 +488,253 @@ def _reaction_demo_breakdown(reactions_df: pd.DataFrame) -> dict[str, Any]:
         }
 
     return breakdown
+
+
+# ---------------------------------------------------------------------------
+# Bridging Score Computation
+# ---------------------------------------------------------------------------
+
+def _counts_to_distribution(counts: dict[str, int]) -> dict[str, float]:
+    """Convert bucket counts to a probability distribution."""
+    total = sum(counts.values())
+    if total == 0:
+        return {}
+    return {k: v / total for k, v in counts.items()}
+
+
+def _jsd_between_distributions(
+    dist_a: dict[str, float],
+    dist_b: dict[str, float],
+) -> float:
+    """Compute Jensen-Shannon divergence between two distributions.
+
+    Returns a value in [0, 1] where 0 = identical distributions.
+    Handles cases where distributions have different keys by unioning them.
+    """
+    if not dist_a or not dist_b:
+        return 1.0  # Maximum divergence if one is empty
+
+    # Union of all keys
+    all_keys = sorted(set(dist_a.keys()) | set(dist_b.keys()))
+    if not all_keys:
+        return 1.0
+
+    # Build aligned probability vectors (add small epsilon to avoid log(0))
+    eps = 1e-10
+    p = np.array([dist_a.get(k, 0.0) + eps for k in all_keys])
+    q = np.array([dist_b.get(k, 0.0) + eps for k in all_keys])
+
+    # Normalize to ensure they sum to 1
+    p = p / p.sum()
+    q = q / q.sum()
+
+    # scipy's jensenshannon returns the JS distance (sqrt of divergence)
+    # We square it to get divergence, which is bounded [0, 1]
+    js_distance = jensenshannon(p, q)
+    return float(js_distance ** 2)
+
+
+def _compute_dimension_coverage(
+    upvote_demos: dict[str, list[str | None]],
+    downvote_demos: dict[str, list[str | None]],
+) -> dict[str, float]:
+    """Compute coverage (fraction of non-null values) for each dimension."""
+    coverage: dict[str, float] = {}
+    for dim in BRIDGING_DIMENSIONS:
+        up_values = upvote_demos.get(dim, [])
+        down_values = downvote_demos.get(dim, [])
+        all_values = up_values + down_values
+        if not all_values:
+            coverage[dim] = 0.0
+        else:
+            non_null = sum(1 for v in all_values if v is not None)
+            coverage[dim] = non_null / len(all_values)
+    return coverage
+
+
+def _compute_effective_weights(coverage: dict[str, float]) -> dict[str, float]:
+    """Compute effective weights by adjusting base weights for coverage, then renormalizing."""
+    effective: dict[str, float] = {}
+    for dim in BRIDGING_DIMENSIONS:
+        effective[dim] = BRIDGING_BASE_WEIGHTS[dim] * coverage.get(dim, 0.0)
+
+    total = sum(effective.values())
+    if total == 0:
+        return {dim: 0.0 for dim in BRIDGING_DIMENSIONS}
+
+    return {dim: w / total for dim, w in effective.items()}
+
+
+def _compute_bridging_score(
+    idea_reactions: pd.DataFrame,
+    total_votes: int,
+) -> dict[str, Any]:
+    """Compute the bridging score for an idea.
+
+    Returns a dict with:
+    - bridging_score: float 0-100 or None if insufficient data
+    - confidence_level: "low" | "medium" | "high" | None
+    - demographic_coverage: float (fraction of reactions with known demos)
+    - engagement_confidence: float 0-1
+    - demographic_confidence: float 0-1
+    - per_dimension_scores: dict of dimension → score (0-1)
+    - downvote_diversity: float 0-1 (separate metric)
+    - cross_coalition_used: bool
+    """
+    _ensure_user_demo_cache()
+    _build_population_baseline()
+
+    result: dict[str, Any] = {
+        "bridging_score": None,
+        "confidence_level": None,
+        "demographic_coverage": 0.0,
+        "engagement_confidence": 0.0,
+        "demographic_confidence": 0.0,
+        "per_dimension_scores": {},
+        "downvote_diversity": None,
+        "cross_coalition_used": False,
+    }
+
+    if idea_reactions.empty or total_votes == 0:
+        return result
+
+    # Split into upvotes and downvotes
+    up = idea_reactions[idea_reactions["mode"] == "up"] if "mode" in idea_reactions.columns else pd.DataFrame()
+    down = idea_reactions[idea_reactions["mode"] == "down"] if "mode" in idea_reactions.columns else pd.DataFrame()
+
+    # Collect demographics for each reaction
+    def collect_demos(df: pd.DataFrame) -> dict[str, list[str | None]]:
+        demos: dict[str, list[str | None]] = {dim: [] for dim in BRIDGING_DIMENSIONS}
+        for _, r in df.iterrows():
+            uid = _clean_val(r.get("user_id"))
+            d = _user_demo_cache.get(uid, {}) if uid else {}
+            for dim in BRIDGING_DIMENSIONS:
+                demos[dim].append(d.get(dim))
+        return demos
+
+    up_demos = collect_demos(up)
+    down_demos = collect_demos(down)
+
+    # Count reactions with at least one known demographic value
+    def count_known_demo_reactions(df: pd.DataFrame) -> int:
+        count = 0
+        for _, r in df.iterrows():
+            uid = _clean_val(r.get("user_id"))
+            d = _user_demo_cache.get(uid, {}) if uid else {}
+            if any(d.get(dim) is not None for dim in BRIDGING_DIMENSIONS):
+                count += 1
+        return count
+
+    up_known = count_known_demo_reactions(up)
+    down_known = count_known_demo_reactions(down)
+    total_known = up_known + down_known
+
+    result["demographic_coverage"] = total_known / total_votes if total_votes > 0 else 0.0
+
+    # Check minimum threshold
+    if total_known < BRIDGING_MIN_KNOWN_DEMO_REACTIONS:
+        return result
+
+    # Engagement confidence: 1 - exp(-total_votes / k)
+    engagement_conf = 1.0 - math.exp(-total_votes / BRIDGING_ENGAGEMENT_SCALE)
+    result["engagement_confidence"] = round(engagement_conf, 4)
+
+    # Demographic confidence: min(1, known / threshold)
+    demo_conf = min(1.0, total_known / BRIDGING_FULL_CONFIDENCE_REACTIONS)
+    result["demographic_confidence"] = round(demo_conf, 4)
+
+    # Compute coverage per dimension and effective weights
+    coverage = _compute_dimension_coverage(up_demos, down_demos)
+    effective_weights = _compute_effective_weights(coverage)
+
+    # Compute per-dimension diversity scores using JSD from population baseline
+    per_dim_scores: dict[str, float] = {}
+    for dim in BRIDGING_DIMENSIONS:
+        up_counts = _bucket_counter([v for v in up_demos[dim] if v is not None])
+        up_dist = _counts_to_distribution(up_counts)
+        pop_dist = _population_baseline.get(dim, {})
+
+        if not up_dist or not pop_dist:
+            per_dim_scores[dim] = 0.0
+        else:
+            jsd = _jsd_between_distributions(up_dist, pop_dist)
+            per_dim_scores[dim] = 1.0 - jsd  # Score = 1 when identical to population
+
+    result["per_dimension_scores"] = {dim: round(s, 4) for dim, s in per_dim_scores.items()}
+
+    # Compute upvote diversity as weighted average
+    upvote_diversity = sum(
+        effective_weights[dim] * per_dim_scores[dim]
+        for dim in BRIDGING_DIMENSIONS
+    )
+
+    # Compute downvote diversity (separate metric, not in main score)
+    down_dim_scores: dict[str, float] = {}
+    for dim in BRIDGING_DIMENSIONS:
+        down_counts = _bucket_counter([v for v in down_demos[dim] if v is not None])
+        down_dist = _counts_to_distribution(down_counts)
+        pop_dist = _population_baseline.get(dim, {})
+
+        if not down_dist or not pop_dist:
+            down_dim_scores[dim] = 0.0
+        else:
+            jsd = _jsd_between_distributions(down_dist, pop_dist)
+            down_dim_scores[dim] = 1.0 - jsd
+
+    downvote_diversity = sum(
+        effective_weights[dim] * down_dim_scores[dim]
+        for dim in BRIDGING_DIMENSIONS
+    )
+    result["downvote_diversity"] = round(downvote_diversity, 4)
+
+    # Cross-coalition signal (JSD between upvote and downvote distributions)
+    # Only compute if we have enough downvotes with known demographics
+    cross_coalition_score = 0.0
+    use_jsd = down_known >= BRIDGING_MIN_DOWNVOTES_FOR_JSD
+
+    if use_jsd:
+        result["cross_coalition_used"] = True
+        cross_coalition_dims: dict[str, float] = {}
+        for dim in BRIDGING_DIMENSIONS:
+            up_counts = _bucket_counter([v for v in up_demos[dim] if v is not None])
+            down_counts = _bucket_counter([v for v in down_demos[dim] if v is not None])
+            up_dist = _counts_to_distribution(up_counts)
+            down_dist = _counts_to_distribution(down_counts)
+
+            if not up_dist or not down_dist:
+                cross_coalition_dims[dim] = 0.0
+            else:
+                jsd = _jsd_between_distributions(up_dist, down_dist)
+                # 1 - JSD: score = 1 when upvoters and downvoters look identical
+                cross_coalition_dims[dim] = 1.0 - jsd
+
+        cross_coalition_score = sum(
+            effective_weights[dim] * cross_coalition_dims[dim]
+            for dim in BRIDGING_DIMENSIONS
+        )
+
+        # Combine upvote diversity and cross-coalition
+        diversity_composite = (
+            BRIDGING_UPVOTE_DIVERSITY_WEIGHT * upvote_diversity +
+            BRIDGING_CROSS_COALITION_WEIGHT * cross_coalition_score
+        )
+    else:
+        # Fall back to upvote diversity only
+        diversity_composite = upvote_diversity
+
+    # Final bridging score
+    bridging_score = engagement_conf * demo_conf * diversity_composite * 100
+    result["bridging_score"] = round(bridging_score, 2)
+
+    # Confidence level
+    if total_known >= BRIDGING_FULL_CONFIDENCE_REACTIONS and total_votes >= 20:
+        result["confidence_level"] = "high"
+    elif total_known >= BRIDGING_MIN_KNOWN_DEMO_REACTIONS * 1.5:
+        result["confidence_level"] = "medium"
+    else:
+        result["confidence_level"] = "low"
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -475,6 +811,9 @@ def _build_single_idea(idea_row: pd.Series, reactions_df: pd.DataFrame) -> dict[
     if isinstance(title, dict):
         title = title.get("en", title.get("", str(title)))
 
+    # Bridging score
+    bridging = _compute_bridging_score(idea_reactions, total)
+
     return {
         "idea_id": idea_id,
         "title": str(title),
@@ -488,4 +827,5 @@ def _build_single_idea(idea_row: pd.Series, reactions_df: pd.DataFrame) -> dict[
             "downvotes": downvotes,
             "demographic_breakdown": demo_breakdown,
         },
+        "bridging": bridging,
     }

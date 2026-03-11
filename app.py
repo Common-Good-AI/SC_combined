@@ -184,6 +184,18 @@ def ideas_detail(idea_id: str):
     return jsonify(result)
 
 
+@app.route("/api/ideas/bridging")
+def ideas_by_bridging():
+    """Ideas sorted by bridging score (descending). Includes only ideas with a score."""
+    all_ideas = idea_analytics.build_idea_view()
+    if not all_ideas or not isinstance(all_ideas, list):
+        return jsonify([])
+    # Filter to ideas that have a bridging score, sort descending
+    scored = [i for i in all_ideas if i.get("bridging", {}).get("bridging_score") is not None]
+    scored.sort(key=lambda x: x["bridging"]["bridging_score"], reverse=True)
+    return jsonify(scored)
+
+
 # ── Entry point ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))

@@ -16,6 +16,7 @@ A Flask-based backend that aggregates civic-engagement data from **GoVocal** and
   - [Data](#data)
   - [Analytics](#analytics)
   - [Ideas](#ideas)
+- [Bridging Score Algorithm](#bridging-score-algorithm)
 - [Deployment](#deployment)
 
 ---
@@ -329,7 +330,7 @@ Per-source breakdown of actions and participants, plus overall totals.
 
 #### `GET /api/ideas`
 
-Unified view of every ideation idea, sorted by total reactions (descending). Each entry includes metadata, author demographics, reaction totals, and per-demographic breakdowns of upvotes/downvotes.
+Unified view of every ideation idea, sorted by total reactions (descending). Each entry includes metadata, author demographics, reaction totals, per-demographic breakdowns of upvotes/downvotes, and a bridging score.
 
 ```json
 [
@@ -342,7 +343,8 @@ Unified view of every ideation idea, sorted by total reactions (descending). Eac
     "author_demographics": {
       "age_bucket": "35-44",
       "race": "White",
-      "zipcode": "30301",
+      "region": "Midlands",
+      "urban_rural": "Urban",
       "political_lean": "Somewhat Liberal"
     },
     "reactions": {
@@ -356,8 +358,25 @@ Unified view of every ideation idea, sorted by total reactions (descending). Eac
         },
         "race": { "upvotes": { "…": "…" }, "downvotes": { "…": "…" } },
         "political_lean": { "upvotes": { "…": "…" }, "downvotes": { "…": "…" } },
-        "zipcode": { "upvotes": { "…": "…" }, "downvotes": { "…": "…" } }
+        "region": { "upvotes": { "…": "…" }, "downvotes": { "…": "…" } },
+        "urban_rural": { "upvotes": { "…": "…" }, "downvotes": { "…": "…" } }
       }
+    },
+    "bridging": {
+      "bridging_score": 78.5,
+      "confidence_level": "high",
+      "demographic_coverage": 0.85,
+      "engagement_confidence": 0.98,
+      "demographic_confidence": 1.0,
+      "per_dimension_scores": {
+        "political_lean": 0.92,
+        "age_bucket": 0.88,
+        "race": 0.95,
+        "region": 0.91,
+        "urban_rural": 0.97
+      },
+      "downvote_diversity": 0.72,
+      "cross_coalition_used": true
     }
   }
 ]
@@ -370,6 +389,101 @@ Returns a single idea with the same shape as above. Returns `404` if the idea is
 | Parameter | Location | Description |
 |---|---|---|
 | `idea_id` | URL path | GoVocal idea UUID |
+
+#### `GET /api/ideas/bridging`
+
+Returns ideas sorted by **bridging score** (descending), filtered to only include ideas that have a computable score (≥8 reactions with known demographics).
+
+Useful for surfacing ideas with broad cross-demographic support.
+
+---
+
+## Bridging Score Algorithm
+
+The **bridging score** measures how broadly an idea is supported across demographic groups, inspired by bridging algorithms used in platforms like Pol.is. Unlike Pol.is (which infers groups from voting patterns), this implementation uses direct demographic data.
+
+### Score Components
+
+The final bridging score (0–100) is computed as:
+
+```
+bridging_score = engagement_confidence × demographic_confidence × diversity_composite × 100
+```
+
+#### 1. Engagement Confidence (0–1)
+
+A sigmoid function of total votes that prevents low-vote ideas from scoring high:
+
+```
+engagement_confidence = 1 - exp(-total_votes / 10)
+```
+
+| Total Votes | Confidence |
+|-------------|------------|
+| 10          | 63%        |
+| 20          | 86%        |
+| 30          | 95%        |
+
+#### 2. Demographic Confidence (0–1)
+
+Scales by how many reactions have known demographics:
+
+```
+demographic_confidence = min(1, known_demo_reactions / 20)
+```
+
+If fewer than **8 reactions** have known demographics, the bridging score is `null` (insufficient data).
+
+#### 3. Diversity Composite (0–1)
+
+Measures how well the idea's upvote distribution matches the overall voter population across five demographic dimensions:
+
+| Dimension      | Base Weight |
+|----------------|-------------|
+| Political lean | 40%         |
+| Age            | 20%         |
+| Race           | 20%         |
+| Region         | 10%         |
+| Urban/Rural    | 10%         |
+
+**Per-dimension score** = `1 - JSD(idea_upvotes, population_baseline)`
+
+where JSD is Jensen-Shannon divergence. A score of 1.0 means the idea's upvoters perfectly mirror the overall voter population for that dimension.
+
+**Coverage adjustment**: Base weights are scaled by each dimension's data coverage (fraction of reactions with a value for that dimension), then renormalized. This prevents dimensions with sparse data from distorting the score.
+
+#### 4. Cross-Coalition Signal (when available)
+
+When an idea has **≥5 downvotes with known demographics**, the algorithm also computes a cross-coalition signal:
+
+```
+cross_coalition = 1 - JSD(upvote_distribution, downvote_distribution)
+```
+
+If upvoters and downvoters look demographically similar (high cross-coalition score), the idea genuinely cuts across group lines rather than splitting along demographic fault lines.
+
+When cross-coalition is available, the diversity composite becomes:
+
+```
+diversity_composite = 0.6 × upvote_diversity + 0.4 × cross_coalition
+```
+
+### Separate Metrics
+
+The following are reported separately (not folded into the main score):
+
+- **`downvote_diversity`**: Same calculation as upvote diversity, but on downvotes. Useful for identifying ideas where opposition is non-traditional (spread across demographics rather than concentrated).
+- **`demographic_coverage`**: Fraction of reactions with known demographics.
+- **`per_dimension_scores`**: Individual dimension scores for transparency.
+- **`confidence_level`**: "low" / "medium" / "high" based on data availability.
+
+### Design Decisions
+
+1. **Population-relative diversity**: Uses JSD from the actual voter population rather than theoretical equal distribution. This accounts for structural imbalances (e.g., if 85% of voters are White, a "perfectly bridging" idea doesn't need equal race representation).
+
+2. **Sparse data handling**: Only reactions with known demographics are used. Demographics come primarily from Typeform respondents who also have GoVocal accounts — many GoVocal-only users lack demographic data.
+
+3. **Multiplicative gating**: Engagement and demographic confidence are multiplied (not added), so low-vote ideas can't achieve high scores regardless of diversity.
 
 ---
 
@@ -388,6 +502,8 @@ Deploy to any platform that supports Python buildpacks (Heroku, Render, Railway,
 - Python 3.10+
 - Flask 3.1
 - pandas 2.2
+- numpy 1.26+
+- scipy 1.11+
 - requests 2.32
 - python-dotenv 1.1
 - gunicorn 23.0
