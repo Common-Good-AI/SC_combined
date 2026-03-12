@@ -526,6 +526,77 @@ def compute_participation_breakdown() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Participation timeline (daily counts by action type)
+# ---------------------------------------------------------------------------
+
+def compute_participation_timeline() -> dict[str, Any]:
+    """Aggregate daily participation counts by action type.
+
+    Returns a sorted list of ``{date, surveys, ideas, reactions, total}``
+    dictionaries — one per calendar day that has at least one action.
+    """
+    records: list[dict[str, Any]] = []
+
+    # --- Surveys: GV survey ideas + all Typeform submissions ---
+    gv_survey = store.get("gv_ideas_survey", pd.DataFrame())
+    if not gv_survey.empty and "created_at" in gv_survey.columns:
+        dates = pd.to_datetime(gv_survey["created_at"], errors="coerce").dt.date
+        for d, cnt in dates.value_counts().items():
+            records.append({"date": str(d), "category": "surveys", "count": int(cnt)})
+
+    for tf_df in _all_tf_frames():
+        ts_col = "submitted_at" if "submitted_at" in tf_df.columns else "created_at"
+        if ts_col not in tf_df.columns or tf_df.empty:
+            continue
+        dates = pd.to_datetime(tf_df[ts_col], errors="coerce").dt.date
+        for d, cnt in dates.value_counts().items():
+            records.append({"date": str(d), "category": "surveys", "count": int(cnt)})
+
+    # --- Ideas: GV ideation ---
+    gv_ideation = store.get("gv_ideas_ideation", pd.DataFrame())
+    if not gv_ideation.empty and "created_at" in gv_ideation.columns:
+        dates = pd.to_datetime(gv_ideation["created_at"], errors="coerce").dt.date
+        for d, cnt in dates.value_counts().items():
+            records.append({"date": str(d), "category": "ideas", "count": int(cnt)})
+
+    # --- Reactions ---
+    gv_reactions = store.get("gv_reactions", pd.DataFrame())
+    if not gv_reactions.empty and "created_at" in gv_reactions.columns:
+        dates = pd.to_datetime(gv_reactions["created_at"], errors="coerce").dt.date
+        for d, cnt in dates.value_counts().items():
+            records.append({"date": str(d), "category": "reactions", "count": int(cnt)})
+
+    if not records:
+        return {"timeline": []}
+
+    df = pd.DataFrame(records)
+    pivot = (
+        df.groupby(["date", "category"])["count"]
+        .sum()
+        .unstack(fill_value=0)
+        .sort_index()
+    )
+
+    for col in ("surveys", "ideas", "reactions"):
+        if col not in pivot.columns:
+            pivot[col] = 0
+
+    pivot["total"] = pivot["surveys"] + pivot["ideas"] + pivot["reactions"]
+
+    timeline = []
+    for date_val, row in pivot.iterrows():
+        timeline.append({
+            "date": str(date_val),
+            "surveys": int(row["surveys"]),
+            "ideas": int(row["ideas"]),
+            "reactions": int(row["reactions"]),
+            "total": int(row["total"]),
+        })
+
+    return {"timeline": timeline}
+
+
+# ---------------------------------------------------------------------------
 # All-in-one summary
 # ---------------------------------------------------------------------------
 

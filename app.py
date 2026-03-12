@@ -1,11 +1,11 @@
-"""Flask application — Phase 1 + Phase 2a: API connectivity, data health, and analytics."""
+"""Flask application — Phase 1–3: API connectivity, data health, analytics, and UI."""
 
 from __future__ import annotations
 
 import logging
 import os
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 
 from backend.config import Config
 from backend.data_store import get_summary, meta, refresh_all, store
@@ -20,7 +20,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ── App factory ──────────────────────────────────────────────────────────
-app = Flask(__name__)
+app = Flask(__name__, static_folder="frontend", static_url_path="/static")
 
 
 # ── Startup hook ─────────────────────────────────────────────────────────
@@ -56,12 +56,7 @@ def _lazy_load():
 
 @app.route("/")
 def index():
-    return jsonify({
-        "app": "GoVocal + Typeform Admin Dashboard",
-        "phase": "2a",
-        "status": meta["status"],
-        "hint": "Try /api/health, /api/data/summary, or /api/analytics/summary",
-    })
+    return send_from_directory(app.static_folder, "index.html")
 
 
 @app.route("/api/health")
@@ -194,6 +189,12 @@ def ideas_by_bridging():
     scored = [i for i in all_ideas if i.get("bridging", {}).get("bridging_score") is not None]
     scored.sort(key=lambda x: x["bridging"]["bridging_score"], reverse=True)
     return jsonify(scored)
+
+
+@app.route("/api/analytics/participation-timeline")
+def analytics_participation_timeline():
+    """Daily participation counts by action type (surveys, ideas, reactions)."""
+    return jsonify(analytics.compute_participation_timeline())
 
 
 # ── Entry point ──────────────────────────────────────────────────────────

@@ -42,9 +42,9 @@ _RACE_LABELS: dict[str, str] = {
 # Political lean code → human-readable label
 _POLITICAL_LABELS: dict[str, str] = {
     "very_liberal_gp0": "Very Liberal",
-    "somewhat_liberal_10r": "Somewhat Liberal",
+    "somewhat_liberal_10r": "Liberal",
     "moderate_middle_of_the_road_jgq": "Moderate",
-    "somewhat_conservative_3bp": "Somewhat Conservative",
+    "somewhat_conservative_3bp": "Conservative",
     "very_conservative_iwv": "Very Conservative",
     "prefer_not_to_say_dgj": "Prefer not to say",
 }
@@ -52,9 +52,9 @@ _POLITICAL_LABELS: dict[str, str] = {
 # Typeform political labels → canonical labels (align with GoVocal human-readable)
 _TF_POLITICAL_NORMALIZE: dict[str, str] = {
     "Very Liberal": "Very Liberal",
-    "Liberal": "Somewhat Liberal",
+    "Liberal": "Liberal",
     "Moderate": "Moderate",
-    "Conservative": "Somewhat Conservative",
+    "Conservative": "Conservative",
     "Very Conservative": "Very Conservative",
     "Not sure": "Not sure",
 }
