@@ -197,6 +197,12 @@ def analytics_participation_timeline():
     return jsonify(analytics.compute_participation_timeline())
 
 
+@app.route("/api/analytics/participation-timeline/by-source")
+def analytics_participation_timeline_by_source():
+    """Daily new unique participants, broken down by tier."""
+    return jsonify(analytics.compute_participants_timeline())
+
+
 # ── Entry point ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))

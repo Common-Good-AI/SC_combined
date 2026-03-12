@@ -597,6 +597,184 @@ def compute_participation_timeline() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Unique participants over time
+# ---------------------------------------------------------------------------
+
+def compute_participants_timeline() -> dict[str, Any]:
+    """Track when each unique participant first appeared in the system.
+
+    Returns a daily timeline with ``new`` (new unique participants that day)
+    for each of three participant tiers: *confirmed*, *email_only*, and
+    *anonymous*.  The frontend can compute cumulative totals.
+    """
+    confirmed_emails = _get_confirmed_emails()
+
+    # ── Collect (identifier, first-seen date) for every participant ──
+    # identified participants keyed by normalised email → earliest date
+    email_first_seen: dict[str, str] = {}  # email → "YYYY-MM-DD"
+
+    def _record_email(email: str, date_str: str) -> None:
+        """Track the earliest date for this email."""
+        prev = email_first_seen.get(email)
+        if prev is None or date_str < prev:
+            email_first_seen[email] = date_str
+
+    # -- Confirmed users: registration date from gv_users --
+    gv_users = store.get("gv_users", pd.DataFrame())
+    if not gv_users.empty and "email" in gv_users.columns:
+        ts_col = (
+            "registration_completed_at"
+            if "registration_completed_at" in gv_users.columns
+            else "created_at"
+        )
+        if ts_col in gv_users.columns:
+            tmp = gv_users[["email", ts_col]].copy()
+            tmp["_email"] = _normalise_emails(tmp["email"])
+            tmp["_date"] = pd.to_datetime(tmp[ts_col], errors="coerce").dt.date
+            for _, row in tmp.dropna(subset=["_email", "_date"]).iterrows():
+                _record_email(row["_email"], str(row["_date"]))
+
+    # -- GV ideas (survey + ideation): author_id → email + custom fields --
+    for key in ("gv_ideas_survey", "gv_ideas_ideation"):
+        df = store.get(key, pd.DataFrame())
+        if df.empty or "created_at" not in df.columns:
+            continue
+        df = df.copy()
+        df["_date"] = pd.to_datetime(df["created_at"], errors="coerce").dt.date
+
+        # via author_id → gv_users join (merge locally to keep date aligned)
+        if "author_id" in df.columns:
+            users_df = store.get("gv_users")
+            if users_df is not None and "email" in users_df.columns:
+                tmp = df[["author_id", "_date"]].merge(
+                    users_df[["id", "email"]].rename(columns={"id": "author_id"}),
+                    on="author_id",
+                    how="left",
+                )
+                for _, row in tmp.dropna(subset=["email", "_date"]).iterrows():
+                    email = str(row["email"]).strip().lower()
+                    if email and email not in ("nan", "none"):
+                        _record_email(email, str(row["_date"]))
+
+        # via custom_field_values email columns (index is preserved — safe to use)
+        for col in _GV_IDEA_EMAIL_COLS:
+            if col in df.columns:
+                normed = _normalise_emails(df[col])
+                for idx, email in normed.items():
+                    d = df.at[idx, "_date"] if idx in df.index else None
+                    if d is not None and pd.notna(d):
+                        _record_email(email, str(d))
+
+    # -- GV reactions: user_id → email (merge locally to keep date aligned) --
+    gv_reactions = store.get("gv_reactions", pd.DataFrame())
+    if not gv_reactions.empty and "created_at" in gv_reactions.columns:
+        users_df = store.get("gv_users")
+        if users_df is not None and "email" in users_df.columns:
+            tmp = gv_reactions[["user_id", "created_at"]].copy()
+            tmp["_date"] = pd.to_datetime(tmp["created_at"], errors="coerce").dt.date
+            merged = tmp.merge(
+                users_df[["id", "email"]].rename(columns={"id": "user_id"}),
+                on="user_id",
+                how="left",
+            )
+            for _, row in merged.dropna(subset=["email", "_date"]).iterrows():
+                email = str(row["email"]).strip().lower()
+                if email and email not in ("nan", "none"):
+                    _record_email(email, str(row["_date"]))
+
+    # -- Typeform: email column (reset_index to ensure 0-based alignment) --
+    for _key, tf_df in _all_tf_frames_with_keys():
+        if tf_df.empty:
+            continue
+        ts_col = "submitted_at" if "submitted_at" in tf_df.columns else "created_at"
+        if ts_col not in tf_df.columns:
+            continue
+        tf_clean = tf_df.reset_index(drop=True)
+        dates = pd.to_datetime(tf_clean[ts_col], errors="coerce").dt.date
+        tf_em = _tf_emails(tf_clean)
+        for idx, email in tf_em.items():
+            d = dates.get(idx)
+            if d is not None and pd.notna(d):
+                _record_email(email, str(d))
+
+    # ── Anonymous participants (no email → each row is unique) ──
+    anon_dates: list[str] = []
+
+    for key in ("gv_ideas_survey", "gv_ideas_ideation"):
+        df = store.get(key, pd.DataFrame())
+        if df.empty or "created_at" not in df.columns:
+            continue
+        dates = pd.to_datetime(df["created_at"], errors="coerce").dt.date
+        for idx, row in df.iterrows():
+            has_author = pd.notna(row.get("author_id"))
+            has_email = not _row_has_no_email(row)
+            if not has_author and not has_email:
+                d = dates.get(idx)
+                if d is not None and pd.notna(d):
+                    anon_dates.append(str(d))
+
+    for _key, tf_df in _all_tf_frames_with_keys():
+        if tf_df.empty:
+            continue
+        ts_col = "submitted_at" if "submitted_at" in tf_df.columns else "created_at"
+        if ts_col not in tf_df.columns:
+            continue
+        dates = pd.to_datetime(tf_df[ts_col], errors="coerce").dt.date
+        for idx, _row in tf_df.iterrows():
+            email_val = tf_df.at[idx, "email"] if "email" in tf_df.columns else (
+                tf_df.at[idx, "hidden_email"] if "hidden_email" in tf_df.columns else None
+            )
+            is_blank = (
+                email_val is None
+                or pd.isna(email_val)
+                or str(email_val).strip().lower() in ("", "nan", "none")
+            )
+            if is_blank:
+                d = dates.get(idx)
+                if d is not None and pd.notna(d):
+                    anon_dates.append(str(d))
+
+    # ── Build daily new-participant counts ──
+    records: list[dict[str, Any]] = []
+
+    for email, d in email_first_seen.items():
+        tier = "confirmed" if email in confirmed_emails else "email_only"
+        records.append({"date": d, "tier": tier})
+
+    for d in anon_dates:
+        records.append({"date": d, "tier": "anonymous"})
+
+    if not records:
+        return {"timeline": []}
+
+    df_rec = pd.DataFrame(records)
+    pivot = (
+        df_rec.groupby(["date", "tier"])
+        .size()
+        .unstack(fill_value=0)
+        .sort_index()
+    )
+
+    for col in ("confirmed", "email_only", "anonymous"):
+        if col not in pivot.columns:
+            pivot[col] = 0
+
+    pivot["total"] = pivot["confirmed"] + pivot["email_only"] + pivot["anonymous"]
+
+    timeline = []
+    for date_val, row in pivot.iterrows():
+        timeline.append({
+            "date": str(date_val),
+            "confirmed": int(row["confirmed"]),
+            "email_only": int(row["email_only"]),
+            "anonymous": int(row["anonymous"]),
+            "total": int(row["total"]),
+        })
+
+    return {"timeline": timeline}
+
+
+# ---------------------------------------------------------------------------
 # All-in-one summary
 # ---------------------------------------------------------------------------
 
