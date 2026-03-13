@@ -33,6 +33,9 @@ meta: dict[str, Any] = {
     "status": "not_loaded",
 }
 
+# Per-resource timestamps for incremental fetching (ISO 8601 strings)
+_last_fetch: dict[str, str] = {}
+
 # ── Demographic field helpers ────────────────────────────────────────────
 # These are the demographic fields we want to extract from GoVocal's
 # custom_field_values dicts.  Map from *possible* API key variants to our
@@ -287,6 +290,31 @@ def _build_unified_demographics() -> pd.DataFrame:
 
 # ── Public API ───────────────────────────────────────────────────────────
 
+
+def _upsert_df(
+    existing: pd.DataFrame,
+    new: pd.DataFrame,
+    id_col: str = "id",
+) -> pd.DataFrame:
+    """Merge *new* rows into *existing* by *id_col*.
+
+    - Rows in *new* whose id already exists in *existing* replace the old row.
+    - Rows in *new* with a brand-new id are appended.
+    """
+    if new.empty:
+        return existing
+    if existing.empty:
+        return new
+    # Drop rows from existing that are being updated
+    mask = existing[id_col].isin(new[id_col])
+    kept = existing[~mask]
+    return pd.concat([kept, new], ignore_index=True)
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def refresh_all() -> dict[str, Any]:
     """Fetch everything from both APIs and rebuild the in-memory store.
 
@@ -300,6 +328,7 @@ def refresh_all() -> dict[str, Any]:
 
     # Clear old data
     store.clear()
+    _last_fetch.clear()
 
     # Ingest
     store.update(_ingest_govocal(gv))
@@ -308,14 +337,238 @@ def refresh_all() -> dict[str, Any]:
     # Build unified demographics table
     store["unified_demographics"] = _build_unified_demographics()
 
-    meta["last_refresh"] = datetime.now(timezone.utc).isoformat()
+    now = _now_iso()
+    meta["last_refresh"] = now
     meta["status"] = "loaded" if not meta["errors"] else "loaded_with_errors"
+
+    # Record per-resource timestamps so incremental knows when to start
+    for key in store:
+        _last_fetch[key] = now
 
     # Dump all DataFrames to JSON for inspection
     dump_store_to_json()
 
     summary = get_summary()
-    log.info("Data store refreshed: %s", summary)
+    log.info("Data store refreshed (full): %s", summary)
+    return summary
+
+
+# ── Incremental refresh ─────────────────────────────────────────────────
+
+
+def _ingest_govocal_incremental(gv: GoVocalClient) -> None:
+    """Incrementally update GoVocal data already in the store.
+
+    For each resource:
+    1. Check the API total count vs cached row count.
+       If API count < cached → records were deleted → full-fetch that resource.
+    2. Otherwise, fetch only records updated after ``_last_fetch[resource]``
+       and upsert them into the existing DataFrame.
+    """
+    errors: list[str] = []
+    now = _now_iso()
+
+    # --- Projects & Phases: always full (tiny datasets) ---
+    try:
+        projects_raw = gv.get_projects()
+        store["gv_projects"] = pd.json_normalize(projects_raw)
+    except Exception as exc:
+        errors.append(f"GoVocal projects error: {exc}")
+
+    all_phases: list[dict] = []
+    for pid in Config.GV_PROJECT_IDS:
+        try:
+            all_phases.extend(gv.get_phases(pid))
+        except Exception as exc:
+            errors.append(f"GoVocal phases error (project {pid}): {exc}")
+    if all_phases:
+        store["gv_phases"] = pd.json_normalize(all_phases)
+
+    # --- Ideas ---
+    try:
+        api_idea_count = sum(
+            gv.get_idea_count(project_id=pid) for pid in Config.GV_PROJECT_IDS
+        )
+        cached_count = len(store.get("gv_ideas", pd.DataFrame()))
+        since = _last_fetch.get("gv_ideas")
+
+        if api_idea_count < cached_count or not since:
+            if since:
+                log.info("GoVocal ideas: count mismatch (API %d vs cached %d) – full fetch",
+                         api_idea_count, cached_count)
+            all_ideas: list[dict] = []
+            for pid in Config.GV_PROJECT_IDS:
+                project_ideas = gv.get_ideas(project_id=pid)
+                for idea in project_ideas:
+                    idea.setdefault("project_id", pid)
+                all_ideas.extend(project_ideas)
+            if all_ideas:
+                for idea in all_ideas:
+                    idea.update(_extract_demographics(idea.get("custom_field_values")))
+                store["gv_ideas"] = pd.json_normalize(all_ideas)
+        else:
+            delta_ideas: list[dict] = []
+            for pid in Config.GV_PROJECT_IDS:
+                project_ideas = gv.get_ideas(project_id=pid, updated_after=since)
+                for idea in project_ideas:
+                    idea.setdefault("project_id", pid)
+                delta_ideas.extend(project_ideas)
+            log.info("GoVocal ideas: %d new/updated since %s", len(delta_ideas), since)
+            if delta_ideas:
+                for idea in delta_ideas:
+                    idea.update(_extract_demographics(idea.get("custom_field_values")))
+                new_df = pd.json_normalize(delta_ideas)
+                store["gv_ideas"] = _upsert_df(store["gv_ideas"], new_df, "id")
+
+        # Rebuild convenience subsets
+        if "gv_ideas" in store and "type" in store["gv_ideas"].columns:
+            df = store["gv_ideas"]
+            store["gv_ideas_ideation"] = df[df["type"] == "idea"].copy()
+            store["gv_ideas_survey"] = df[df["type"] == "survey"].copy()
+        _last_fetch["gv_ideas"] = now
+    except Exception as exc:
+        errors.append(f"GoVocal ideas incremental error: {exc}")
+        log.error("GoVocal ideas incremental error: %s", exc)
+
+    # --- Users ---
+    try:
+        api_user_count = gv.get_user_count()
+        cached_count = len(store.get("gv_users", pd.DataFrame()))
+        since = _last_fetch.get("gv_users")
+
+        if api_user_count < cached_count or not since:
+            if since:
+                log.info("GoVocal users: count mismatch (API %d vs cached %d) – full fetch",
+                         api_user_count, cached_count)
+            users_raw = gv.get_users()
+            for user in users_raw:
+                user.update(_extract_demographics(user.get("custom_field_values")))
+            store["gv_users"] = pd.json_normalize(users_raw)
+        else:
+            delta = gv.get_users(updated_after=since)
+            log.info("GoVocal users: %d new/updated since %s", len(delta), since)
+            if delta:
+                for user in delta:
+                    user.update(_extract_demographics(user.get("custom_field_values")))
+                store["gv_users"] = _upsert_df(store["gv_users"], pd.json_normalize(delta), "id")
+        _last_fetch["gv_users"] = now
+    except Exception as exc:
+        errors.append(f"GoVocal users incremental error: {exc}")
+        log.error("GoVocal users incremental error: %s", exc)
+
+    # --- Comments ---
+    try:
+        api_count = gv.get_comment_count()
+        cached_count = len(store.get("gv_comments", pd.DataFrame()))
+        since = _last_fetch.get("gv_comments")
+
+        if api_count < cached_count or not since:
+            if since:
+                log.info("GoVocal comments: count mismatch (API %d vs cached %d) – full fetch",
+                         api_count, cached_count)
+            comments_raw = gv.get_comments()
+            if comments_raw:
+                store["gv_comments"] = pd.json_normalize(comments_raw)
+        else:
+            delta = gv.get_comments(updated_after=since)
+            log.info("GoVocal comments: %d new/updated since %s", len(delta), since)
+            if delta:
+                store["gv_comments"] = _upsert_df(
+                    store.get("gv_comments", pd.DataFrame()), pd.json_normalize(delta), "id"
+                )
+        _last_fetch["gv_comments"] = now
+    except Exception as exc:
+        errors.append(f"GoVocal comments incremental error: {exc}")
+        log.error("GoVocal comments incremental error: %s", exc)
+
+    # --- Reactions ---
+    try:
+        api_count = gv.get_reaction_count()
+        cached_count = len(store.get("gv_reactions", pd.DataFrame()))
+        since = _last_fetch.get("gv_reactions")
+
+        if api_count < cached_count or not since:
+            if since:
+                log.info("GoVocal reactions: count mismatch (API %d vs cached %d) – full fetch",
+                         api_count, cached_count)
+            reactions_raw = gv.get_reactions()
+            store["gv_reactions"] = pd.json_normalize(reactions_raw) if reactions_raw else pd.DataFrame()
+        else:
+            delta = gv.get_reactions(updated_after=since)
+            log.info("GoVocal reactions: %d new/updated since %s", len(delta), since)
+            if delta:
+                store["gv_reactions"] = _upsert_df(
+                    store.get("gv_reactions", pd.DataFrame()), pd.json_normalize(delta), "id"
+                )
+        _last_fetch["gv_reactions"] = now
+    except Exception as exc:
+        errors.append(f"GoVocal reactions incremental error: {exc}")
+        log.error("GoVocal reactions incremental error: %s", exc)
+
+    if errors:
+        meta["errors"].extend(errors)
+
+
+def _ingest_typeform_incremental(tf: TypeformClient) -> None:
+    """Incrementally fetch new Typeform responses and append to the store."""
+    errors: list[str] = []
+    now = _now_iso()
+
+    for form_id in Config.TF_FORM_IDS:
+        key = f"tf_{form_id}"
+        try:
+            since = _last_fetch.get(key)
+            if not since or key not in store:
+                # No prior data — full fetch
+                flat_responses = tf.get_responses(form_id)
+                store[key] = pd.DataFrame(flat_responses)
+                log.info("Typeform: form %s → %d responses (full)", form_id, len(flat_responses))
+            else:
+                flat_responses = tf.get_responses(form_id, since=since)
+                log.info("Typeform: form %s → %d new responses since %s",
+                         form_id, len(flat_responses), since)
+                if flat_responses:
+                    new_df = pd.DataFrame(flat_responses)
+                    store[key] = _upsert_df(store[key], new_df, "response_id")
+            _last_fetch[key] = now
+        except Exception as exc:
+            msg = f"Typeform incremental error (form {form_id}): {exc}"
+            log.error(msg)
+            errors.append(msg)
+
+    if errors:
+        meta["errors"].extend(errors)
+
+
+def refresh_incremental() -> dict[str, Any]:
+    """Fetch only new/updated records from both APIs.
+
+    Falls back to :func:`refresh_all` if the store is empty (first load).
+    Returns a summary dict with row counts per DataFrame.
+    """
+    if not store or meta["status"] == "not_loaded":
+        log.info("Store is empty – falling back to full refresh")
+        return refresh_all()
+
+    meta["errors"] = []
+    meta["status"] = "loading"
+
+    gv = GoVocalClient()
+    tf = TypeformClient()
+
+    _ingest_govocal_incremental(gv)
+    _ingest_typeform_incremental(tf)
+
+    # Always rebuild unified demographics (cross-source dependency)
+    store["unified_demographics"] = _build_unified_demographics()
+
+    meta["last_refresh"] = _now_iso()
+    meta["status"] = "loaded" if not meta["errors"] else "loaded_with_errors"
+
+    dump_store_to_json()
+
+    summary = get_summary()
+    log.info("Data store refreshed (incremental): %s", summary)
     return summary
 
 

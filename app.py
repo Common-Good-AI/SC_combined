@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 import os
 
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 
 from backend.config import Config
-from backend.data_store import get_summary, meta, refresh_all, store
+from backend.data_store import get_summary, meta, refresh_all, refresh_incremental, store
 from backend import analytics
 from backend import idea_analytics
 
@@ -81,13 +81,21 @@ def data_summary():
 
 @app.route("/api/data/refresh", methods=["POST"])
 def data_refresh():
-    """Re-fetch all data from both APIs."""
+    """Re-fetch data from both APIs.
+
+    By default performs an **incremental** refresh (only new/updated records).
+    Pass ``?full=true`` to force a complete re-fetch of all data.
+    """
     problems = Config.validate()
     if problems:
         return jsonify({"error": "config_invalid", "problems": problems}), 400
     try:
         idea_analytics.invalidate_cache()
-        summary = refresh_all()
+        full = request.args.get("full", "").lower() in ("true", "1", "yes")
+        if full:
+            summary = refresh_all()
+        else:
+            summary = refresh_incremental()
         return jsonify(summary)
     except Exception as exc:
         log.exception("Refresh failed")

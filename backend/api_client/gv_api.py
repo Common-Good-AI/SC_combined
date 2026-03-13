@@ -112,6 +112,40 @@ class GoVocalClient:
         log.info("GoVocal: %s → %d items", endpoint, len(all_items))
         return all_items
 
+    # ── Resource count (for deletion detection) ─────────────────────────
+
+    def get_resource_count(
+        self,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+    ) -> int:
+        """Return the total number of items for *endpoint* without fetching all pages."""
+        self._ensure_auth()
+        url = f"{self.base_url}{endpoint}"
+        p = dict(params or {})
+        p["page_size"] = 1
+        p["page_number"] = 1
+        headers = {"Authorization": f"Bearer {self._jwt}"}
+        resp = requests.get(url, headers=headers, params=p, timeout=30)
+        resp.raise_for_status()
+        body = resp.json()
+        return body.get("meta", {}).get("total", 0)
+
+    def get_idea_count(self, project_id: str | None = None) -> int:
+        params: dict[str, Any] = {}
+        if project_id:
+            params["project_id"] = project_id
+        return self.get_resource_count("/api/v2/ideas/", params)
+
+    def get_user_count(self) -> int:
+        return self.get_resource_count("/api/v2/users/")
+
+    def get_comment_count(self) -> int:
+        return self.get_resource_count("/api/v2/comments/")
+
+    def get_reaction_count(self) -> int:
+        return self.get_resource_count("/api/v2/reactions")
+
     # ── High-level data fetchers ─────────────────────────────────────────
 
     def get_projects(self, project_ids: list[str] | None = None) -> list[dict]:
@@ -137,23 +171,38 @@ class GoVocalClient:
         self,
         project_id: str | None = None,
         idea_type: str | None = None,
+        updated_after: str | None = None,
     ) -> list[dict]:
-        """Fetch ideas, optionally filtered by project and/or type (idea|survey)."""
+        """Fetch ideas, optionally filtered by project, type, or update time."""
         params: dict[str, Any] = {}
         if project_id:
             params["project_id"] = project_id
         if idea_type:
             params["type"] = idea_type
+        if updated_after:
+            params["updated_after"] = updated_after
         return self._request("/api/v2/ideas/", params=params)
 
-    def get_users(self) -> list[dict]:
-        return self._request("/api/v2/users/")
+    def get_users(self, updated_after: str | None = None) -> list[dict]:
+        params: dict[str, Any] = {}
+        if updated_after:
+            params["updated_after"] = updated_after
+        return self._request("/api/v2/users/", params=params)
 
-    def get_comments(self, idea_id: str | None = None) -> list[dict]:
+    def get_comments(
+        self,
+        idea_id: str | None = None,
+        updated_after: str | None = None,
+    ) -> list[dict]:
         params: dict[str, Any] = {}
         if idea_id:
             params["idea_id"] = idea_id
+        if updated_after:
+            params["updated_after"] = updated_after
         return self._request("/api/v2/comments/", params=params)
 
-    def get_reactions(self) -> list[dict]:
-        return self._request("/api/v2/reactions")
+    def get_reactions(self, updated_after: str | None = None) -> list[dict]:
+        params: dict[str, Any] = {}
+        if updated_after:
+            params["updated_after"] = updated_after
+        return self._request("/api/v2/reactions", params=params)

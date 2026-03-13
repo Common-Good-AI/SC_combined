@@ -87,22 +87,28 @@ _ZIPCODE_GEO_LOADED = False
 # Political lean is most important (0.4), others split evenly
 BRIDGING_DIMENSIONS: list[str] = ["political_lean", "age_bucket", "race", "region", "urban_rural"]
 BRIDGING_BASE_WEIGHTS: dict[str, float] = {
-    "political_lean": 0.40,
-    "age_bucket": 0.20,
-    "race": 0.20,
+    "political_lean": 0.50,
+    "age_bucket": 0.10,
+    "race": 0.10,
     "region": 0.10,
-    "urban_rural": 0.10,
+    "urban_rural": 0.20,
 }
 
 # Thresholds for bridging score confidence
-BRIDGING_MIN_KNOWN_DEMO_REACTIONS = 8   # Below this, bridging score = None (insufficient data)
-BRIDGING_FULL_CONFIDENCE_REACTIONS = 20  # At this level, demographic_confidence = 1.0
+BRIDGING_MIN_KNOWN_DEMO_REACTIONS = 15   # Below this, bridging score = None (insufficient data)
+BRIDGING_FULL_CONFIDENCE_REACTIONS = 30  # At this level, demographic_confidence = 1.0
 BRIDGING_ENGAGEMENT_SCALE = 10  # k in engagement_confidence = 1 - exp(-total/k)
+
+# Approval ratio settings
+BRIDGING_APPROVAL_EXPONENT = 1.5  # exponent for (upvotes/total)^n — higher = harsher penalty for low approval
+
+# Engagement volume settings
+BRIDGING_ENGAGEMENT_REFERENCE = 150  # total_votes at which engagement_factor = 1.0 (log curve)
 
 # Cross-coalition (JSD) settings
 BRIDGING_MIN_DOWNVOTES_FOR_JSD = 5  # Need this many downvotes with known demos to compute JSD
-BRIDGING_UPVOTE_DIVERSITY_WEIGHT = 0.6  # w1 in composite when JSD is available
-BRIDGING_CROSS_COALITION_WEIGHT = 0.4   # w2 in composite when JSD is available
+BRIDGING_UPVOTE_DIVERSITY_WEIGHT = 0.8  # w1 in composite when JSD is available
+BRIDGING_CROSS_COALITION_WEIGHT = 0.2   # w2 in composite when JSD is available
 
 
 def _load_zipcode_geo() -> None:
@@ -590,6 +596,8 @@ def _compute_bridging_score(
         "demographic_coverage": 0.0,
         "engagement_confidence": 0.0,
         "demographic_confidence": 0.0,
+        "approval_factor": 0.0,
+        "engagement_factor": 0.0,
         "per_dimension_scores": {},
         "downvote_diversity": None,
         "cross_coalition_used": False,
@@ -615,6 +623,11 @@ def _compute_bridging_score(
     up_demos = collect_demos(up)
     down_demos = collect_demos(down)
 
+    # Approval factor: (upvotes / total) ^ exponent
+    approval_ratio = len(up) / total_votes if total_votes > 0 else 0.0
+    approval_factor = approval_ratio ** BRIDGING_APPROVAL_EXPONENT
+    result["approval_factor"] = round(approval_factor, 4)
+
     # Count reactions with at least one known demographic value
     def count_known_demo_reactions(df: pd.DataFrame) -> int:
         count = 0
@@ -638,6 +651,10 @@ def _compute_bridging_score(
     # Engagement confidence: 1 - exp(-total_votes / k)
     engagement_conf = 1.0 - math.exp(-total_votes / BRIDGING_ENGAGEMENT_SCALE)
     result["engagement_confidence"] = round(engagement_conf, 4)
+
+    # Engagement factor: log curve rewarding higher participation volume
+    engagement_factor = min(1.0, math.log1p(total_votes) / math.log1p(BRIDGING_ENGAGEMENT_REFERENCE))
+    result["engagement_factor"] = round(engagement_factor, 4)
 
     # Demographic confidence: min(1, known / threshold)
     demo_conf = min(1.0, total_known / BRIDGING_FULL_CONFIDENCE_REACTIONS)
@@ -723,7 +740,7 @@ def _compute_bridging_score(
         diversity_composite = upvote_diversity
 
     # Final bridging score
-    bridging_score = engagement_conf * demo_conf * diversity_composite * 100
+    bridging_score = engagement_conf * demo_conf * approval_factor * engagement_factor * diversity_composite * 100
     result["bridging_score"] = round(bridging_score, 2)
 
     # Confidence level

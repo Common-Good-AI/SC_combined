@@ -44,7 +44,7 @@ const IdeaDetail = {
               <div class="stat-label">
                 Bridging Score
                 <span class="info-icon"
-                      @mouseenter="showTooltip($event, 'Measures cross-demographic appeal (0-100). Weighted: Political Lean 40%, Age 20%, Race 20%, Region 10%, Urban/Rural 10%. Higher = wider cross-group appeal.')"
+                      @mouseenter="showTooltip($event, 'Measures cross-demographic appeal (0-100). Factors in approval ratio (likes vs dislikes), engagement volume (more reactions = higher weight), demographic diversity (Political Lean 50%, Urban/Rural 20%, Age 10%, Race 10%, Region 10%), and engagement level. Higher = wider cross-group appeal with strong approval and participation.')"
                       @mouseleave="hideTooltip">
                   &#9432;
                 </span>
@@ -56,7 +56,15 @@ const IdeaDetail = {
           <div v-if="idea.bridging && idea.bridging.bridging_score != null" class="demo-section">
             <h4>Bridging Score Breakdown</h4>
             <div class="stat-grid">
-              <div class="stat-card" v-for="(val, dim) in idea.bridging.dimension_scores" :key="dim">
+              <div class="stat-card" v-if="idea.bridging.approval_factor != null">
+                <div class="stat-value" style="font-size:1.1rem">{{ (idea.bridging.approval_factor * 100).toFixed(0) }}%</div>
+                <div class="stat-label">Approval Factor</div>
+              </div>
+              <div class="stat-card" v-if="idea.bridging.engagement_factor != null">
+                <div class="stat-value" style="font-size:1.1rem">{{ (idea.bridging.engagement_factor * 100).toFixed(0) }}%</div>
+                <div class="stat-label">Engagement Factor</div>
+              </div>
+              <div class="stat-card" v-for="(val, dim) in idea.bridging.per_dimension_scores" :key="dim">
                 <div class="stat-value" style="font-size:1.1rem">{{ fmtScore(val) }}</div>
                 <div class="stat-label">{{ formatDim(dim) }}</div>
               </div>

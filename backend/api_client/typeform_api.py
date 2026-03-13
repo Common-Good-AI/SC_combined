@@ -58,10 +58,20 @@ class TypeformClient:
 
     # ── Responses (with cursor pagination) ───────────────────────────────
 
-    def get_responses_raw(self, form_id: str) -> list[dict[str, Any]]:
-        """Return the raw ``items`` list for *form_id*, paginated."""
+    def get_responses_raw(
+        self,
+        form_id: str,
+        since: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return the raw ``items`` list for *form_id*, paginated.
+
+        If *since* is given (ISO 8601), only responses submitted after that
+        timestamp are returned.
+        """
         all_items: list[dict[str, Any]] = []
         params: dict[str, Any] = {"page_size": _PAGE_SIZE}
+        if since:
+            params["since"] = since
 
         while True:
             body = self._request(f"/forms/{form_id}/responses", params=params)
@@ -83,8 +93,15 @@ class TypeformClient:
 
     # ── Flattened responses ──────────────────────────────────────────────
 
-    def get_responses(self, form_id: str) -> list[dict[str, Any]]:
+    def get_responses(
+        self,
+        form_id: str,
+        since: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Fetch responses for *form_id* and return a list of flat dicts.
+
+        If *since* is given (ISO 8601), only new responses submitted after
+        that timestamp are returned.
 
         Each dict contains:
         - ``response_id``
@@ -100,7 +117,7 @@ class TypeformClient:
         field_map = self._build_field_map(definition)
 
         # 2) Get raw responses
-        raw_items = self.get_responses_raw(form_id)
+        raw_items = self.get_responses_raw(form_id, since=since)
 
         # 3) Flatten each response
         flat: list[dict[str, Any]] = []

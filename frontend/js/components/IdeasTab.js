@@ -42,7 +42,7 @@ const IdeasTab = {
                 <th @click="sortBy('bridging')" style="width:160px">
                   Bridging Score
                   <span class="info-icon"
-                        @mouseenter="showTooltip($event, 'Measures how broadly an idea is supported across demographic groups (0-100). Weighted: Political Lean 40%, Age 20%, Race 20%, Region 10%, Urban/Rural 10%. Higher = wider cross-group appeal.')"
+                        @mouseenter="showTooltip($event, 'Measures how broadly an idea is supported across demographic groups (0-100). Factors in approval ratio (likes vs dislikes), engagement volume (more reactions = higher weight), demographic diversity of support (Political Lean 50%, Urban/Rural 20%, Age 10%, Race 10%, Region 10%), and engagement level. Higher = wider cross-group appeal with strong approval and participation.')"
                         @mouseleave="hideTooltip"
                         @click.stop>
                     &#9432;
