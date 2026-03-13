@@ -359,11 +359,11 @@ def refresh_all() -> dict[str, Any]:
 def _ingest_govocal_incremental(gv: GoVocalClient) -> None:
     """Incrementally update GoVocal data already in the store.
 
-    For each resource:
-    1. Check the API total count vs cached row count.
-       If API count < cached → records were deleted → full-fetch that resource.
-    2. Otherwise, fetch only records updated after ``_last_fetch[resource]``
-       and upsert them into the existing DataFrame.
+    For each resource we compare the API total count with the cached row
+    count:
+      - Equal  → data is unchanged (survey data is append-only) → **skip**.
+      - Greater → new records added → full-fetch that resource and upsert.
+      - Less   → records were deleted → full-fetch that resource.
     """
     errors: list[str] = []
     now = _now_iso()
@@ -392,9 +392,10 @@ def _ingest_govocal_incremental(gv: GoVocalClient) -> None:
         cached_count = len(store.get("gv_ideas", pd.DataFrame()))
         since = _last_fetch.get("gv_ideas")
 
-        if api_idea_count < cached_count or not since:
+        if not since or api_idea_count < cached_count:
+            # No prior data or deletions detected → full fetch
             if since:
-                log.info("GoVocal ideas: count mismatch (API %d vs cached %d) – full fetch",
+                log.info("GoVocal ideas: deletion detected (API %d vs cached %d) – full fetch",
                          api_idea_count, cached_count)
             all_ideas: list[dict] = []
             for pid in Config.GV_PROJECT_IDS:
@@ -406,18 +407,23 @@ def _ingest_govocal_incremental(gv: GoVocalClient) -> None:
                 for idea in all_ideas:
                     idea.update(_extract_demographics(idea.get("custom_field_values")))
                 store["gv_ideas"] = pd.json_normalize(all_ideas)
+        elif api_idea_count == cached_count:
+            log.info("GoVocal ideas: count unchanged (%d) – skipping", cached_count)
         else:
-            delta_ideas: list[dict] = []
+            # api_idea_count > cached_count: new records added → full-fetch
+            # and upsert (API does not support reliable updated_after filtering)
+            log.info("GoVocal ideas: %d new (API %d vs cached %d) – fetching",
+                     api_idea_count - cached_count, api_idea_count, cached_count)
+            all_ideas = []
             for pid in Config.GV_PROJECT_IDS:
-                project_ideas = gv.get_ideas(project_id=pid, updated_after=since)
+                project_ideas = gv.get_ideas(project_id=pid)
                 for idea in project_ideas:
                     idea.setdefault("project_id", pid)
-                delta_ideas.extend(project_ideas)
-            log.info("GoVocal ideas: %d new/updated since %s", len(delta_ideas), since)
-            if delta_ideas:
-                for idea in delta_ideas:
+                all_ideas.extend(project_ideas)
+            if all_ideas:
+                for idea in all_ideas:
                     idea.update(_extract_demographics(idea.get("custom_field_values")))
-                new_df = pd.json_normalize(delta_ideas)
+                new_df = pd.json_normalize(all_ideas)
                 store["gv_ideas"] = _upsert_df(store["gv_ideas"], new_df, "id")
 
         # Rebuild convenience subsets
@@ -436,21 +442,23 @@ def _ingest_govocal_incremental(gv: GoVocalClient) -> None:
         cached_count = len(store.get("gv_users", pd.DataFrame()))
         since = _last_fetch.get("gv_users")
 
-        if api_user_count < cached_count or not since:
+        if not since or api_user_count < cached_count:
             if since:
-                log.info("GoVocal users: count mismatch (API %d vs cached %d) – full fetch",
+                log.info("GoVocal users: deletion detected (API %d vs cached %d) – full fetch",
                          api_user_count, cached_count)
             users_raw = gv.get_users()
             for user in users_raw:
                 user.update(_extract_demographics(user.get("custom_field_values")))
             store["gv_users"] = pd.json_normalize(users_raw)
+        elif api_user_count == cached_count:
+            log.info("GoVocal users: count unchanged (%d) – skipping", cached_count)
         else:
-            delta = gv.get_users(updated_after=since)
-            log.info("GoVocal users: %d new/updated since %s", len(delta), since)
-            if delta:
-                for user in delta:
-                    user.update(_extract_demographics(user.get("custom_field_values")))
-                store["gv_users"] = _upsert_df(store["gv_users"], pd.json_normalize(delta), "id")
+            log.info("GoVocal users: %d new (API %d vs cached %d) – fetching",
+                     api_user_count - cached_count, api_user_count, cached_count)
+            users_raw = gv.get_users()
+            for user in users_raw:
+                user.update(_extract_demographics(user.get("custom_field_values")))
+            store["gv_users"] = _upsert_df(store["gv_users"], pd.json_normalize(users_raw), "id")
         _last_fetch["gv_users"] = now
     except Exception as exc:
         errors.append(f"GoVocal users incremental error: {exc}")
@@ -462,19 +470,22 @@ def _ingest_govocal_incremental(gv: GoVocalClient) -> None:
         cached_count = len(store.get("gv_comments", pd.DataFrame()))
         since = _last_fetch.get("gv_comments")
 
-        if api_count < cached_count or not since:
+        if not since or api_count < cached_count:
             if since:
-                log.info("GoVocal comments: count mismatch (API %d vs cached %d) – full fetch",
+                log.info("GoVocal comments: deletion detected (API %d vs cached %d) – full fetch",
                          api_count, cached_count)
             comments_raw = gv.get_comments()
             if comments_raw:
                 store["gv_comments"] = pd.json_normalize(comments_raw)
+        elif api_count == cached_count:
+            log.info("GoVocal comments: count unchanged (%d) – skipping", cached_count)
         else:
-            delta = gv.get_comments(updated_after=since)
-            log.info("GoVocal comments: %d new/updated since %s", len(delta), since)
-            if delta:
+            log.info("GoVocal comments: %d new (API %d vs cached %d) – fetching",
+                     api_count - cached_count, api_count, cached_count)
+            comments_raw = gv.get_comments()
+            if comments_raw:
                 store["gv_comments"] = _upsert_df(
-                    store.get("gv_comments", pd.DataFrame()), pd.json_normalize(delta), "id"
+                    store.get("gv_comments", pd.DataFrame()), pd.json_normalize(comments_raw), "id"
                 )
         _last_fetch["gv_comments"] = now
     except Exception as exc:
@@ -487,18 +498,21 @@ def _ingest_govocal_incremental(gv: GoVocalClient) -> None:
         cached_count = len(store.get("gv_reactions", pd.DataFrame()))
         since = _last_fetch.get("gv_reactions")
 
-        if api_count < cached_count or not since:
+        if not since or api_count < cached_count:
             if since:
-                log.info("GoVocal reactions: count mismatch (API %d vs cached %d) – full fetch",
+                log.info("GoVocal reactions: deletion detected (API %d vs cached %d) – full fetch",
                          api_count, cached_count)
             reactions_raw = gv.get_reactions()
             store["gv_reactions"] = pd.json_normalize(reactions_raw) if reactions_raw else pd.DataFrame()
+        elif api_count == cached_count:
+            log.info("GoVocal reactions: count unchanged (%d) – skipping", cached_count)
         else:
-            delta = gv.get_reactions(updated_after=since)
-            log.info("GoVocal reactions: %d new/updated since %s", len(delta), since)
-            if delta:
+            log.info("GoVocal reactions: %d new (API %d vs cached %d) – fetching",
+                     api_count - cached_count, api_count, cached_count)
+            reactions_raw = gv.get_reactions()
+            if reactions_raw:
                 store["gv_reactions"] = _upsert_df(
-                    store.get("gv_reactions", pd.DataFrame()), pd.json_normalize(delta), "id"
+                    store.get("gv_reactions", pd.DataFrame()), pd.json_normalize(reactions_raw), "id"
                 )
         _last_fetch["gv_reactions"] = now
     except Exception as exc:
@@ -524,9 +538,14 @@ def _ingest_typeform_incremental(tf: TypeformClient) -> None:
                 store[key] = pd.DataFrame(flat_responses)
                 log.info("Typeform: form %s → %d responses (full)", form_id, len(flat_responses))
             else:
-                flat_responses = tf.get_responses(form_id, since=since)
+                # Typeform requires ISO 8601 without microseconds, with Z suffix
+                tf_since = (
+                    datetime.fromisoformat(since)
+                    .strftime("%Y-%m-%dT%H:%M:%SZ")
+                )
+                flat_responses = tf.get_responses(form_id, since=tf_since)
                 log.info("Typeform: form %s → %d new responses since %s",
-                         form_id, len(flat_responses), since)
+                         form_id, len(flat_responses), tf_since)
                 if flat_responses:
                     new_df = pd.DataFrame(flat_responses)
                     store[key] = _upsert_df(store[key], new_df, "response_id")
@@ -587,11 +606,73 @@ def dump_store_to_json(output_dir: str = "data_dump") -> None:
             json.dump(records, f, indent=2, default=str)
         log.info("Dumped %s → %s  (%d rows)", name, path, len(df))
 
-    # Also dump metadata
+    # Also dump metadata + per-resource timestamps so we can restore them
+    meta_dump = {
+        **meta,
+        "_last_fetch": dict(_last_fetch),
+    }
     with open(out / "_meta.json", "w") as f:
-        json.dump(meta, f, indent=2, default=str)
+        json.dump(meta_dump, f, indent=2, default=str)
 
     log.info("All DataFrames dumped to %s/", output_dir)
+
+
+# ── Load cached data from disk ───────────────────────────────────────────
+
+def load_from_cache(input_dir: str = "data_dump") -> bool:
+    """Restore the in-memory store from previously-dumped JSON files.
+
+    Returns True if cache was loaded successfully (at least one DataFrame),
+    False otherwise.
+    """
+    cache = Path(input_dir)
+    meta_path = cache / "_meta.json"
+
+    if not meta_path.exists():
+        log.info("No cache found at %s – will do full fetch", input_dir)
+        return False
+
+    try:
+        with open(meta_path) as f:
+            saved_meta = json.load(f)
+    except (json.JSONDecodeError, OSError) as exc:
+        log.warning("Could not read cache metadata: %s", exc)
+        return False
+
+    loaded_count = 0
+    for json_file in cache.glob("*.json"):
+        if json_file.name == "_meta.json":
+            continue
+        key = json_file.stem  # e.g. "gv_ideas"
+        try:
+            with open(json_file) as f:
+                records = json.load(f)
+            store[key] = pd.DataFrame(records)
+            loaded_count += 1
+            log.info("Cache: loaded %s (%d rows)", key, len(records))
+        except (json.JSONDecodeError, OSError) as exc:
+            log.warning("Cache: skipping %s – %s", json_file.name, exc)
+
+    if loaded_count == 0:
+        return False
+
+    # Restore metadata
+    meta["last_refresh"] = saved_meta.get("last_refresh")
+    meta["errors"] = saved_meta.get("errors", [])
+    meta["status"] = saved_meta.get("status", "loaded")
+
+    # Restore per-resource timestamps so incremental fetching works.
+    # Fall back to last_refresh for all keys if _last_fetch wasn't persisted.
+    saved_timestamps = saved_meta.get("_last_fetch", {})
+    if saved_timestamps:
+        _last_fetch.update(saved_timestamps)
+    elif meta["last_refresh"]:
+        for key in store:
+            _last_fetch[key] = meta["last_refresh"]
+
+    log.info("Cache restored: %d DataFrames, last_refresh=%s",
+             loaded_count, meta['last_refresh'])
+    return True
 
 
 def get_summary() -> dict[str, Any]:

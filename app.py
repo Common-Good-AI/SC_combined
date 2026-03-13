@@ -8,7 +8,7 @@ import os
 from flask import Flask, jsonify, request, send_from_directory
 
 from backend.config import Config
-from backend.data_store import get_summary, meta, refresh_all, refresh_incremental, store
+from backend.data_store import get_summary, load_from_cache, meta, refresh_all, refresh_incremental, store
 from backend import analytics
 from backend import idea_analytics
 
@@ -42,9 +42,16 @@ def _lazy_load():
         meta["errors"] = problems
         return
 
-    log.info("First request – loading data from APIs …")
+    # Try loading cached data from disk first, then do an incremental
+    # refresh to pick up anything new.  Only fall back to a full refresh
+    # if no cache exists.
     try:
-        refresh_all()
+        if load_from_cache():
+            log.info("Cache loaded – running incremental refresh …")
+            refresh_incremental()
+        else:
+            log.info("No cache – running full refresh …")
+            refresh_all()
     except Exception as exc:
         log.exception("Failed to load data on startup")
         meta["status"] = "error"

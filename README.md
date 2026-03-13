@@ -30,7 +30,7 @@ The dashboard pulls data from two external platforms:
 | **GoVocal** (v2 REST API) | Projects, phases, ideas/surveys, users, comments, reactions |
 | **Typeform** (Responses API) | Survey responses with hidden fields and answer flattening |
 
-On the first request the app fetches all configured projects/forms, normalises everything into DataFrames, and exposes analytics through a JSON API.
+On the first request the app loads cached data from disk (if available), then performs an incremental refresh to pick up new records. Data is persisted to `data_dump/` as JSON files, enabling fast restarts without full API re-fetches.
 
 ### Key Capabilities
 
@@ -40,38 +40,42 @@ On the first request the app fetches all configured projects/forms, normalises e
 - **Idea-selection breakdown** — aggregates Typeform multi-choice answers matching a configurable question pattern.
 - **Per-source participation breakdown** — actions and participants broken down by GoVocal surveys, GoVocal ideation, GoVocal reactions, and each Typeform form.
 - **Unified demographics** — merges age, zipcode, political lean, and race from GoVocal custom fields (users and idea submissions) and Typeform survey responses into a single table keyed by email with canonical column names (`email`, `age`, `race`, `zipcode`, `political_lean`, `source`).
+- **Participation timelines** — daily action counts and new unique participants over time, broken down by tier (confirmed, email-only, anonymous).
+- **Interactive frontend** — Vue 3 single-page app with Participation and Ideas tabs, Chart.js visualizations.
 
 ---
 
 ## Architecture
 
 ```
-┌────────────┐  JWT auth   ┌──────────────────┐
-│  GoVocal   │◄────────────│                  │
-│  REST API  │────────────►│                  │
-└────────────┘  paginated  │   Flask App      │
-                           │   (app.py)       │──► JSON API
-┌────────────┐  Bearer     │                  │
-│  Typeform  │◄────────────│  backend/        │
-│  API       │────────────►│  ├ config.py     │
-└────────────┘  cursored   │  ├ data_store.py │
-                           │  ├ analytics.py  │
+┌────────────┐  JWT auth   ┌──────────────────┐       ┌─────────────┐
+│  GoVocal   │◄────────────│                  │       │  Vue 3 SPA  │
+│  REST API  │────────────►│   Flask App      │◄─────►│  + Chart.js │
+└────────────┘  paginated  │   (app.py)       │       └─────────────┘
+                           │                  │──► JSON API
+┌────────────┐  Bearer     │  backend/        │
+│  Typeform  │◄────────────│  ├ config.py     │
+│  API       │────────────►│  ├ data_store.py │
+└────────────┘  cursored   │  ├ analytics.py  │
+                           │  ├ idea_analytics│
                            │  └ api_client/   │
                            └──────────────────┘
                                     │
-                            In-memory pandas
-                            DataFrames (store)
+                            In-memory pandas   ◄──► data_dump/
+                            DataFrames (store)      (JSON cache)
 ```
 
 **Data flow:**
 
 1. `Config` loads credentials/IDs from environment variables (`.env`).
-2. On the first HTTP request, `data_store.refresh_all()` is called.
-3. `GoVocalClient` authenticates via JWT and paginates through all endpoints.
-4. `TypeformClient` fetches form definitions, then cursor-paginates responses and flattens each answer by field title.
-5. Raw JSON is normalised into pandas DataFrames and stored in the module-level `store` dict.
-6. A unified demographics DataFrame is built by mapping source-specific column names to canonical names (`age`, `race`, `zipcode`, `political_lean`) and merging across all sources by email.
-7. Analytics functions in `analytics.py` read from `store` on every request and return plain dicts.
+2. On the first HTTP request, `data_store.load_from_cache()` attempts to restore DataFrames from `data_dump/*.json`.
+3. If cache exists, `refresh_incremental()` fetches only new/changed records (count-based detection). Otherwise, `refresh_all()` performs a full fetch.
+4. `GoVocalClient` authenticates via JWT and paginates through all endpoints.
+5. `TypeformClient` fetches form definitions, then cursor-paginates responses and flattens each answer by field title.
+6. Raw JSON is normalised into pandas DataFrames and stored in the module-level `store` dict.
+7. A unified demographics DataFrame is built by mapping source-specific column names to canonical names (`age`, `race`, `zipcode`, `political_lean`) and merging across all sources by email.
+8. All DataFrames are dumped to `data_dump/` for fast restarts.
+9. Analytics functions in `analytics.py` and `idea_analytics.py` read from `store` on every request and return plain dicts.
 
 ---
 
@@ -85,14 +89,28 @@ On the first request the app fetches all configured projects/forms, normalises e
 ├── backend/
 │   ├── __init__.py
 │   ├── config.py              # Centralised config from env vars
-│   ├── data_store.py          # Data ingestion, in-memory store, refresh logic
-│   ├── analytics.py           # Phase 2a analytics computations
-│   ├── idea_analytics.py      # Per-idea view with reactions & demographics
+│   ├── data_store.py          # Data ingestion, caching, in-memory store, refresh logic
+│   ├── analytics.py           # Participation analytics computations
+│   ├── idea_analytics.py      # Per-idea view with reactions, demographics & bridging
+│   ├── zipcode_county.json    # Zipcode → region/urban-rural lookup table
 │   └── api_client/
 │       ├── __init__.py
 │       ├── gv_api.py          # GoVocal REST API client (JWT + pagination)
 │       └── typeform_api.py    # Typeform Responses API client (cursor pagination)
-└── frontend/                  # (Planned) frontend assets
+├── data_dump/                 # Cached JSON files (auto-generated, gitignored)
+│   ├── _meta.json             # Refresh timestamps for incremental fetching
+│   ├── gv_*.json              # GoVocal data
+│   ├── tf_*.json              # Typeform data
+│   └── unified_demographics.json
+└── frontend/                  # Vue 3 single-page app
+    ├── index.html
+    ├── css/style.css
+    └── js/
+        ├── app.js
+        └── components/
+            ├── ParticipationTab.js
+            ├── IdeasTab.js
+            └── IdeaDetail.js
 ```
 
 ---
@@ -117,7 +135,7 @@ cp .env.example .env   # or create manually
 python app.py
 ```
 
-The server starts on `http://localhost:5000` by default.
+The server starts on `http://localhost:8080` by default.
 
 ---
 
@@ -148,22 +166,13 @@ All settings are read from environment variables (loaded from `.env` via `python
 
 ## API Reference
 
-Base URL: `http://localhost:5000`
+Base URL: `http://localhost:8080`
 
 ### General
 
 #### `GET /`
 
-Returns app info and status.
-
-```json
-{
-  "app": "GoVocal + Typeform Admin Dashboard",
-  "phase": "2a",
-  "status": "loaded",
-  "hint": "Try /api/health, /api/data/summary, or /api/analytics/summary"
-}
-```
+Serves the frontend single-page application (Vue 3 + Chart.js dashboard).
 
 #### `GET /api/health`
 
@@ -202,7 +211,13 @@ Row counts per DataFrame, unique emails per source, cross-source email overlap, 
 
 #### `POST /api/data/refresh`
 
-Re-fetches all data from both APIs and rebuilds the in-memory store. Returns the same payload as `/api/data/summary`.
+Refresh data from both APIs. By default performs an **incremental** refresh (only new records based on count comparison). Pass `?full=true` to force a complete re-fetch.
+
+| Query Param | Description |
+|---|---|
+| `full` | Set to `true` to bypass incremental logic and re-fetch everything |
+
+Returns the same payload as `/api/data/summary`.
 
 #### `GET /api/data/tables`
 
@@ -321,6 +336,32 @@ Per-source breakdown of actions and participants, plus overall totals.
     "anonymous_participants": 15,
     "total_participants": 135
   }
+}
+```
+
+#### `GET /api/analytics/participation-timeline`
+
+Daily participation counts by action type (surveys, ideas, reactions).
+
+```json
+{
+  "timeline": [
+    { "date": "2026-01-15", "surveys": 12, "ideas": 3, "reactions": 45, "total": 60 },
+    { "date": "2026-01-16", "surveys": 8, "ideas": 5, "reactions": 32, "total": 45 }
+  ]
+}
+```
+
+#### `GET /api/analytics/participation-timeline/by-source`
+
+Daily new unique participants, broken down by tier (confirmed account, email-only, anonymous).
+
+```json
+{
+  "timeline": [
+    { "date": "2026-01-15", "confirmed": 5, "email_only": 8, "anonymous": 2, "total": 15 },
+    { "date": "2026-01-16", "confirmed": 3, "email_only": 4, "anonymous": 1, "total": 8 }
+  ]
 }
 ```
 

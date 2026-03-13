@@ -129,7 +129,10 @@ class GoVocalClient:
         resp = requests.get(url, headers=headers, params=p, timeout=30)
         resp.raise_for_status()
         body = resp.json()
-        return body.get("meta", {}).get("total", 0)
+        m = body.get("meta", {})
+        # GoVocal API exposes total_pages but not always a total count.
+        # With page_size=1, total_pages == total records.
+        return m.get("total", m.get("total_pages", 0))
 
     def get_idea_count(self, project_id: str | None = None) -> int:
         params: dict[str, Any] = {}
