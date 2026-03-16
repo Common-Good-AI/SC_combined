@@ -88,7 +88,7 @@ const IdeaDetail = {
                  :key="dim">
               <h4>{{ formatDim(dim) }}</h4>
               <div class="demo-bars">
-                <div class="demo-bar-row" v-for="cat in sortedCategories(data)" :key="cat">
+                <div class="demo-bar-row" v-for="cat in sortedCategories(data, dim)" :key="cat">
                   <span class="demo-bar-label">{{ cat }}</span>
                   <div class="demo-bar-track">
                     <div class="demo-bar-up"
@@ -104,15 +104,58 @@ const IdeaDetail = {
             </div>
           </template>
 
-          <!-- Author demographics -->
-          <div v-if="idea.author_demographics" class="demo-section">
-            <h4>Author Demographics</h4>
-            <table style="font-size:0.85rem">
-              <tr v-for="(val, key) in idea.author_demographics" :key="key">
-                <td style="padding:0.3rem 0.75rem; color:#64748b; font-weight:500">{{ formatDim(key) }}</td>
-                <td style="padding:0.3rem 0.75rem">{{ val || '—' }}</td>
-              </tr>
-            </table>
+          <!-- Author Statistics -->
+          <div v-if="idea.author_demographics || idea.created_at" class="demo-section">
+            <h4>Author Statistics</h4>
+
+            <!-- Submission date -->
+            <div v-if="idea.created_at" class="author-meta">
+              <span class="author-meta-label">Submitted</span>
+              <span class="author-meta-value">{{ formattedDate }}</span>
+            </div>
+
+            <!-- Demographic chips -->
+            <div v-if="idea.author_demographics" class="author-chips">
+              <template v-for="(val, dim) in idea.author_demographics" :key="dim">
+                <div v-if="val" class="author-chip">
+                  <span class="author-chip-label">{{ formatDim(dim) }}</span>
+                  <span class="author-chip-value">{{ val }}</span>
+                </div>
+              </template>
+              <span v-if="!Object.values(idea.author_demographics).some(v => v)" class="author-no-demo">
+                No demographic data available
+              </span>
+            </div>
+
+            <!-- Group vs overall approval -->
+            <div v-if="authorGroupStats.length" class="author-approval">
+              <div class="author-approval-header">Author's Group Approval vs. Overall</div>
+              <div class="author-approval-row" v-for="stat in authorGroupStats" :key="stat.dim">
+                <div class="author-approval-dim">
+                  <span class="author-approval-dim-name">{{ formatDim(stat.dim) }}:</span>
+                  <span class="author-approval-group-name">{{ stat.group }}</span>
+                </div>
+                <div class="author-approval-bars">
+                  <div class="author-approval-bar-row">
+                    <span class="author-approval-bar-label">Group ({{ stat.groupTotal }})</span>
+                    <div class="author-approval-bar-track">
+                      <div class="author-approval-bar-fill"
+                           :class="stat.groupPct >= stat.overallPct ? 'fill-positive' : 'fill-negative'"
+                           :style="{ width: stat.groupPct + '%' }"></div>
+                    </div>
+                    <span class="author-approval-bar-pct">{{ stat.groupPct.toFixed(0) }}%</span>
+                  </div>
+                  <div class="author-approval-bar-row">
+                    <span class="author-approval-bar-label">Overall ({{ stat.overallTotal }})</span>
+                    <div class="author-approval-bar-track">
+                      <div class="author-approval-bar-fill fill-overall"
+                           :style="{ width: stat.overallPct + '%' }"></div>
+                    </div>
+                    <span class="author-approval-bar-pct">{{ stat.overallPct.toFixed(0) }}%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </template>
       </div>
@@ -140,6 +183,36 @@ const IdeaDetail = {
       if (s >= 50) return 'bridging-badge bridging-med';
       return 'bridging-badge bridging-low';
     },
+    formattedDate() {
+      if (!this.idea?.created_at) return null;
+      return new Date(this.idea.created_at).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'long', day: 'numeric',
+      });
+    },
+    authorGroupStats() {
+      if (!this.idea?.author_demographics || !this.idea?.reactions?.demographic_breakdown) return [];
+      const { upvotes, downvotes, total } = this.idea.reactions;
+      const overallPct = total > 0 ? (upvotes / total) * 100 : 0;
+      const results = [];
+      for (const [dim, authorGroup] of Object.entries(this.idea.author_demographics)) {
+        if (!authorGroup) continue;
+        const dimData = this.idea.reactions.demographic_breakdown[dim];
+        if (!dimData) continue;
+        const groupUp = dimData.upvotes?.[authorGroup] || 0;
+        const groupDown = dimData.downvotes?.[authorGroup] || 0;
+        const groupTotal = groupUp + groupDown;
+        if (groupTotal < 3) continue;
+        results.push({
+          dim,
+          group: authorGroup,
+          groupPct: (groupUp / groupTotal) * 100,
+          groupTotal,
+          overallPct,
+          overallTotal: total,
+        });
+      }
+      return results;
+    },
   },
 
   async mounted() {
@@ -163,16 +236,40 @@ const IdeaDetail = {
       if (typeof val !== 'number') return val;
       return val.toFixed(3);
     },
-    sortedCategories(data) {
-      const cats = new Set([
+    sortedCategories(data, dim) {
+      const cats = [...new Set([
         ...Object.keys(data.upvotes || {}),
         ...Object.keys(data.downvotes || {}),
-      ]);
-      return [...cats].sort((a, b) => {
-        const totalA = (data.upvotes[a] || 0) + (data.downvotes[a] || 0);
-        const totalB = (data.upvotes[b] || 0) + (data.downvotes[b] || 0);
-        return totalB - totalA;
-      });
+      ])];
+
+      if (dim === 'age_bucket') {
+        const ORDER = ['Under 18', '18-29', '30-39', '40-49', '50-59', '60-69', '65+', '70+'];
+        return cats.sort((a, b) => {
+          const ai = ORDER.indexOf(a), bi = ORDER.indexOf(b);
+          if (ai === -1 && bi === -1) return a.localeCompare(b);
+          return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+        });
+      }
+
+      if (dim === 'political_lean') {
+        const ORDER = ['Very Conservative', 'Conservative', 'Moderate', 'Liberal', 'Very Liberal', 'Not sure', 'Prefer not to say'];
+        return cats.sort((a, b) => {
+          const ai = ORDER.indexOf(a), bi = ORDER.indexOf(b);
+          if (ai === -1 && bi === -1) return a.localeCompare(b);
+          return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+        });
+      }
+
+      if (dim === 'race') {
+        return cats.sort((a, b) => {
+          const aP = a.toLowerCase().startsWith('prefer'), bP = b.toLowerCase().startsWith('prefer');
+          if (aP !== bP) return aP ? 1 : -1;
+          return a.localeCompare(b);
+        });
+      }
+
+      // region, urban_rural, and any other dims: alphabetical
+      return cats.sort((a, b) => a.localeCompare(b));
     },
     barPct(upCount, downCount, type) {
       const up = upCount || 0;

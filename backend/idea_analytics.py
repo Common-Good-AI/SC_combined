@@ -65,12 +65,12 @@ _EXTRA_RACE_LABELS: dict[str, str] = {
 }
 
 AGE_BUCKETS = [
-    (18, 24, "18-24"),
-    (25, 34, "25-34"),
-    (35, 44, "35-44"),
-    (45, 54, "45-54"),
-    (55, 64, "55-64"),
-    (65, 200, "65+"),
+    (18, 29, "18-29"),
+    (30, 39, "30-39"),
+    (40, 49, "40-49"),
+    (50, 59, "50-59"),
+    (60, 69, "60-69"),
+    (70, 200, "70+"),
 ]
 
 # Zipcode → region / urban_rural lookup
@@ -111,6 +111,10 @@ BRIDGING_ENGAGEMENT_WEIGHT = 0.2  # weight (0-1) of engagement_factor in final s
 BRIDGING_MIN_DOWNVOTES_FOR_JSD = 5  # Need this many downvotes with known demos to compute JSD
 BRIDGING_UPVOTE_DIVERSITY_WEIGHT = 0.7  # w1 in composite when JSD is available
 BRIDGING_CROSS_COALITION_WEIGHT = 0.3   # w2 in composite when JSD is available
+
+# Polarization penalty settings (per-group approval rate variance)
+BRIDGING_POLARIZATION_PENALTY_WEIGHT = 0.6  # How strongly polarization penalizes the score (0=ignore, 1=full penalty)
+BRIDGING_POLARIZATION_MIN_GROUP_VOTES = 3   # Minimum votes in a group to include it in variance calculation
 
 
 def _load_zipcode_geo() -> None:
@@ -551,9 +555,10 @@ def _jsd_between_distributions(
     q = q / q.sum()
 
     # scipy's jensenshannon returns the JS distance (sqrt of divergence)
-    # We square it to get divergence, which is bounded [0, 1]
+    # Use the distance directly (not squared) for better sensitivity to
+    # distribution shifts among minority subgroups.
     js_distance = jensenshannon(p, q)
-    return float(js_distance ** 2)
+    return float(js_distance)
 
 
 def _compute_dimension_coverage(
@@ -587,6 +592,42 @@ def _compute_effective_weights(coverage: dict[str, float]) -> dict[str, float]:
     return {dim: w / total for dim, w in effective.items()}
 
 
+def _compute_group_approval_variance(
+    up_demos: dict[str, list[str | None]],
+    down_demos: dict[str, list[str | None]],
+    dim: str,
+) -> float:
+    """Compute variance of per-group approval rates for a dimension.
+
+    Returns a normalised value in [0, 1] where 0 means all groups approve
+    at the same rate and 1 means maximum polarization (some groups 100%
+    approve while others 0% approve).
+    """
+    up_counts = _bucket_counter([v for v in up_demos[dim] if v is not None])
+    down_counts = _bucket_counter([v for v in down_demos[dim] if v is not None])
+
+    all_groups = set(up_counts.keys()) | set(down_counts.keys())
+    if len(all_groups) < 2:
+        return 0.0
+
+    approval_rates: list[float] = []
+    for group in all_groups:
+        u = up_counts.get(group, 0)
+        d = down_counts.get(group, 0)
+        total = u + d
+        if total >= BRIDGING_POLARIZATION_MIN_GROUP_VOTES:
+            approval_rates.append(u / total)
+
+    if len(approval_rates) < 2:
+        return 0.0
+
+    # Variance of approval rates: 0 = unanimous, 0.25 = maximum split
+    mean = sum(approval_rates) / len(approval_rates)
+    variance = sum((r - mean) ** 2 for r in approval_rates) / len(approval_rates)
+    # Normalise: max possible variance is 0.25 (half at 0%, half at 100%)
+    return min(1.0, variance / 0.25)
+
+
 def _compute_bridging_score(
     idea_reactions: pd.DataFrame,
     total_votes: int,
@@ -617,6 +658,8 @@ def _compute_bridging_score(
         "per_dimension_scores": {},
         "downvote_diversity": None,
         "cross_coalition_used": False,
+        "polarization_scores": {},
+        "polarization_penalty": 0.0,
     }
 
     if idea_reactions.empty or total_votes == 0:
@@ -695,7 +738,21 @@ def _compute_bridging_score(
 
     result["per_dimension_scores"] = {dim: round(s, 4) for dim, s in per_dim_scores.items()}
 
-    # Compute upvote diversity as weighted average
+    # Compute per-dimension polarization (approval-rate variance across groups)
+    polarization_scores: dict[str, float] = {}
+    for dim in BRIDGING_DIMENSIONS:
+        polarization_scores[dim] = _compute_group_approval_variance(up_demos, down_demos, dim)
+    result["polarization_scores"] = {dim: round(s, 4) for dim, s in polarization_scores.items()}
+
+    # Weighted polarization penalty (multiplicative)
+    weighted_polarization = sum(
+        effective_weights[dim] * polarization_scores[dim]
+        for dim in BRIDGING_DIMENSIONS
+    )
+    polarization_factor = 1.0 - BRIDGING_POLARIZATION_PENALTY_WEIGHT * weighted_polarization
+    result["polarization_penalty"] = round(weighted_polarization, 4)
+
+    # Compute upvote diversity as weighted average, then apply polarization penalty
     upvote_diversity = sum(
         effective_weights[dim] * per_dim_scores[dim]
         for dim in BRIDGING_DIMENSIONS
@@ -754,6 +811,9 @@ def _compute_bridging_score(
     else:
         # Fall back to upvote diversity only
         diversity_composite = upvote_diversity
+
+    # Apply multiplicative polarization penalty to diversity composite
+    diversity_composite *= polarization_factor
 
     # Final bridging score
     # Approval and engagement factors are raised to their respective weights

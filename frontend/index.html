@@ -17,13 +17,7 @@
     <!-- Loading screen -->
     <div v-if="appLoading" class="loading-screen">
       <div class="loading-card">
-        <svg class="loading-logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2"/>
-          <path d="M10 16.5C10 14 12 12 16 12C20 12 22 14 22 16.5C22 19 20 21 16 21C12 21 10 19 10 16.5Z" stroke="currentColor" stroke-width="2"/>
-          <circle cx="16" cy="10" r="2" fill="currentColor"/>
-          <circle cx="10" cy="20" r="2" fill="currentColor"/>
-          <circle cx="22" cy="20" r="2" fill="currentColor"/>
-        </svg>
+        <img class="loading-logo" src="/static/logo.svg" alt="GoVocal logo" />
         <h2 class="loading-title">SC Forum Dashboard</h2>
         <div v-if="loadError" class="loading-error">
           <p>{{ loadError }}</p>
@@ -45,13 +39,7 @@
     <header class="header">
       <div class="header-inner">
         <div class="brand">
-          <svg class="brand-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2"/>
-            <path d="M10 16.5C10 14 12 12 16 12C20 12 22 14 22 16.5C22 19 20 21 16 21C12 21 10 19 10 16.5Z" stroke="currentColor" stroke-width="2"/>
-            <circle cx="16" cy="10" r="2" fill="currentColor"/>
-            <circle cx="10" cy="20" r="2" fill="currentColor"/>
-            <circle cx="22" cy="20" r="2" fill="currentColor"/>
-          </svg>
+          <img class="brand-icon" src="/static/logo.svg" alt="GoVocal logo" />
           <div class="brand-text">
             <span class="brand-name">SC Forum</span>
             <span class="brand-tagline">Community Engagement Dashboard</span>
