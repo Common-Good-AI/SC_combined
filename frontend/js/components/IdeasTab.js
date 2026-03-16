@@ -1,4 +1,7 @@
 const IdeasTab = {
+  props: {
+    preloaded: { type: Object, default: () => ({}) },
+  },
   template: `
     <div>
       <div v-if="loading" class="loading">Loading ideas data…</div>
@@ -39,6 +42,16 @@ const IdeasTab = {
                 <th @click="sortBy('dislikes')" style="width:100px">
                   Dislikes <span class="sort-arrow">{{ sortArrow('dislikes') }}</span>
                 </th>
+                <th @click="sortBy('approval')" style="width:130px">
+                  Approval Ratio
+                  <span class="info-icon"
+                        @mouseenter="showTooltip($event, 'Percentage of reactions that are likes: Likes ÷ (Likes + Dislikes). Higher = more broadly approved.')"
+                        @mouseleave="hideTooltip"
+                        @click.stop>
+                    &#9432;
+                  </span>
+                  <span class="sort-arrow">{{ sortArrow('approval') }}</span>
+                </th>
                 <th @click="sortBy('bridging')" style="width:160px">
                   Bridging Score
                   <span class="info-icon"
@@ -59,13 +72,18 @@ const IdeasTab = {
                 <td>{{ idea.reactions.upvotes }}</td>
                 <td>{{ idea.reactions.downvotes }}</td>
                 <td>
+                  <span :class="approvalClass(idea)">
+                    {{ approvalLabel(idea) }}
+                  </span>
+                </td>
+                <td>
                   <span :class="bridgingClass(idea)">
                     {{ bridgingLabel(idea) }}
                   </span>
                 </td>
               </tr>
               <tr v-if="!paginatedIdeas.length">
-                <td colspan="5" style="text-align:center; color:#94a3b8">No ideas found.</td>
+                <td colspan="6" style="text-align:center; color:#94a3b8">No ideas found.</td>
               </tr>
             </tbody>
           </table>
@@ -126,6 +144,11 @@ const IdeasTab = {
         } else if (key === 'dislikes') {
           va = a.reactions.downvotes;
           vb = b.reactions.downvotes;
+        } else if (key === 'approval') {
+          const totalA = a.reactions.upvotes + a.reactions.downvotes;
+          const totalB = b.reactions.upvotes + b.reactions.downvotes;
+          va = totalA > 0 ? a.reactions.upvotes / totalA : -1;
+          vb = totalB > 0 ? b.reactions.upvotes / totalB : -1;
         } else {
           // bridging
           va = (a.bridging && a.bridging.bridging_score != null) ? a.bridging.bridging_score : -1;
@@ -151,12 +174,9 @@ const IdeasTab = {
 
   async mounted() {
     try {
-      const [ideasRes, themesRes] = await Promise.all([
-        fetch('/api/ideas'),
-        fetch('/api/analytics/idea-selections'),
-      ]);
-      this.ideas = await ideasRes.json();
-      this.themes = await themesRes.json();
+      // Use preloaded data from the app loading screen
+      this.ideas = this.preloaded.ideas || [];
+      this.themes = this.preloaded.themes || {};
       this.loading = false;
 
       this.$nextTick(() => this.renderThemesChart());
@@ -203,6 +223,21 @@ const IdeasTab = {
       this.tooltip.visible = false;
     },
 
+    approvalLabel(idea) {
+      const total = idea.reactions.upvotes + idea.reactions.downvotes;
+      if (total === 0) return 'N/A';
+      return ((idea.reactions.upvotes / total) * 100).toFixed(0) + '%';
+    },
+
+    approvalClass(idea) {
+      const total = idea.reactions.upvotes + idea.reactions.downvotes;
+      if (total === 0) return 'bridging-badge bridging-na';
+      const pct = (idea.reactions.upvotes / total) * 100;
+      if (pct >= 70) return 'bridging-badge bridging-high';
+      if (pct >= 45) return 'bridging-badge bridging-med';
+      return 'bridging-badge bridging-low';
+    },
+
     bridgingLabel(idea) {
       if (!idea.bridging || idea.bridging.bridging_score == null) return 'N/A';
       return idea.bridging.bridging_score.toFixed(1);
@@ -211,8 +246,8 @@ const IdeasTab = {
     bridgingClass(idea) {
       if (!idea.bridging || idea.bridging.bridging_score == null) return 'bridging-badge bridging-na';
       const s = idea.bridging.bridging_score;
-      if (s >= 60) return 'bridging-badge bridging-high';
-      if (s >= 35) return 'bridging-badge bridging-med';
+      if (s >= 70) return 'bridging-badge bridging-high';
+      if (s >= 45) return 'bridging-badge bridging-med';
       return 'bridging-badge bridging-low';
     },
 
@@ -226,8 +261,8 @@ const IdeasTab = {
 
       // Color palette
       const colors = [
-        '#1e3a5f', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444',
-        '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316',
+        '#003366', '#0564B8', '#059669', '#d97706', '#dc2626',
+        '#36A0E0', '#C2DFED', '#E4E0D4', '#84cc16', '#f97316',
       ];
       const bgColors = data.map((_, i) => colors[i % colors.length]);
 

@@ -57,12 +57,22 @@ const IdeaDetail = {
             <h4>Bridging Score Breakdown</h4>
             <div class="stat-grid">
               <div class="stat-card" v-if="idea.bridging.approval_factor != null">
-                <div class="stat-value" style="font-size:1.1rem">{{ (idea.bridging.approval_factor * 100).toFixed(0) }}%</div>
-                <div class="stat-label">Approval Factor</div>
+                <div class="stat-value" style="font-size:1.1rem">{{ idea.bridging.approval_factor.toFixed(3) }}</div>
+                <div class="stat-label">
+                  Approval Factor
+                  <span class="info-icon"
+                        @mouseenter="showTooltip($event, 'Ratio of likes to total reactions (0–1). Higher = stronger overall approval.')"
+                        @mouseleave="hideTooltip">&#9432;</span>
+                </div>
               </div>
               <div class="stat-card" v-if="idea.bridging.engagement_factor != null">
-                <div class="stat-value" style="font-size:1.1rem">{{ (idea.bridging.engagement_factor * 100).toFixed(0) }}%</div>
-                <div class="stat-label">Engagement Factor</div>
+                <div class="stat-value" style="font-size:1.1rem">{{ idea.bridging.engagement_factor.toFixed(3) }}</div>
+                <div class="stat-label">
+                  Engagement Factor
+                  <span class="info-icon"
+                        @mouseenter="showTooltip($event, 'Measures reaction volume relative to the most-reacted idea (0–1). An idea with the highest total reactions scores 1.000.')"
+                        @mouseleave="hideTooltip">&#9432;</span>
+                </div>
               </div>
               <div class="stat-card" v-for="(val, dim) in idea.bridging.per_dimension_scores" :key="dim">
                 <div class="stat-value" style="font-size:1.1rem">{{ fmtScore(val) }}</div>
@@ -126,8 +136,8 @@ const IdeaDetail = {
     bridgingClass() {
       if (!this.idea || !this.idea.bridging || this.idea.bridging.bridging_score == null) return 'bridging-badge bridging-na';
       const s = this.idea.bridging.bridging_score;
-      if (s >= 60) return 'bridging-badge bridging-high';
-      if (s >= 35) return 'bridging-badge bridging-med';
+      if (s >= 75) return 'bridging-badge bridging-high';
+      if (s >= 50) return 'bridging-badge bridging-med';
       return 'bridging-badge bridging-low';
     },
   },
@@ -150,7 +160,8 @@ const IdeaDetail = {
     },
     fmtScore(val) {
       if (val == null) return '—';
-      return (typeof val === 'number') ? val.toFixed(1) : val;
+      if (typeof val !== 'number') return val;
+      return val.toFixed(3);
     },
     sortedCategories(data) {
       const cats = new Set([

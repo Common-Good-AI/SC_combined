@@ -329,7 +329,7 @@ def compute_conversion_rate() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# 4. Idea selection breakdown (Typeform question)
+# 4. Idea selection breakdown (Typeform question + GV initial survey)
 # ---------------------------------------------------------------------------
 
 def _find_idea_question_column(df: pd.DataFrame) -> str | None:
@@ -341,15 +341,33 @@ def _find_idea_question_column(df: pd.DataFrame) -> str | None:
     return None
 
 
-def compute_idea_selection_breakdown() -> dict[str, Any]:
-    """Which ideas were selected most across all Typeform survey responses.
+# Mapping from GV initial-survey coded theme values
+# (custom_field_values.your_question_op0) to human-readable labels that align
+# with the Typeform theme labels where possible.
+_GV_THEME_LABELS: dict[str, str] = {
+    "political_reform_t2g": "Political Reform and Governance",
+    "healthcare_access_and_affordability_ch0": "Health Care Costs and Access",
+    "quality_education_qvy": "Fixing Our Schools",
+    "wages_and_job_development_q0c": "Jobs, Wages, and Rising Costs",
+    "option1": "Roads, Traffic, and Infrastructure",
+    "option2": "Something else",
+}
 
-    Looks at the question matching TF_IDEA_QUESTION_PATTERN across all TF
-    forms (which are duplicates).  Multi-choice answers are comma-separated.
+_GV_INITIAL_SURVEY_PROJECT_ID = "b3808271-ec77-485f-b028-7b9a25cf37ed"
+_GV_INITIAL_SURVEY_THEME_COL = "custom_field_values.your_question_op0"
+
+
+def compute_idea_selection_breakdown() -> dict[str, Any]:
+    """Which themes were selected most across all survey responses.
+
+    Combines:
+    - Typeform responses (question matching TF_IDEA_QUESTION_PATTERN)
+    - GoVocal initial survey (custom_field_values.your_question_op0)
     """
     all_selections: list[str] = []
     matched_column: str | None = None
 
+    # --- Typeform responses ---
     for tf_df in _all_tf_frames():
         if tf_df.empty:
             continue
@@ -362,6 +380,18 @@ def compute_idea_selection_breakdown() -> dict[str, Any]:
             val = val.strip()
             if val:
                 all_selections.append(val)
+
+    # --- GoVocal initial survey responses ---
+    gv_survey = store.get("gv_ideas_survey")
+    if gv_survey is not None and not gv_survey.empty:
+        initial = gv_survey[gv_survey["project_id"] == _GV_INITIAL_SURVEY_PROJECT_ID]
+        if _GV_INITIAL_SURVEY_THEME_COL in initial.columns:
+            raw = initial[_GV_INITIAL_SURVEY_THEME_COL].dropna().astype(str)
+            for val in raw:
+                val = val.strip()
+                if val and val not in ("nan", "NaN", ""):
+                    label = _GV_THEME_LABELS.get(val, val)
+                    all_selections.append(label)
 
     if not all_selections:
         return {

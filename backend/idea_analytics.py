@@ -97,18 +97,20 @@ BRIDGING_BASE_WEIGHTS: dict[str, float] = {
 # Thresholds for bridging score confidence
 BRIDGING_MIN_KNOWN_DEMO_REACTIONS = 15   # Below this, bridging score = None (insufficient data)
 BRIDGING_FULL_CONFIDENCE_REACTIONS = 30  # At this level, demographic_confidence = 1.0
-BRIDGING_ENGAGEMENT_SCALE = 10  # k in engagement_confidence = 1 - exp(-total/k)
+BRIDGING_ENGAGEMENT_SCALE = 50  # k in engagement_confidence = 1 - exp(-total/k)
 
 # Approval ratio settings
 BRIDGING_APPROVAL_EXPONENT = 1.5  # exponent for (upvotes/total)^n — higher = harsher penalty for low approval
+BRIDGING_APPROVAL_WEIGHT = 0.7   # weight (0-1) of approval_factor in final score; 1.0 = full influence, 0.0 = ignored
 
-# Engagement volume settings
-BRIDGING_ENGAGEMENT_REFERENCE = 150  # total_votes at which engagement_factor = 1.0 (log curve)
+# Engagement volume settings (dynamically computed as max reactions across all ideas)
+BRIDGING_ENGAGEMENT_REFERENCE_FALLBACK = 150  # fallback if reactions data is unavailable
+BRIDGING_ENGAGEMENT_WEIGHT = 0.2  # weight (0-1) of engagement_factor in final score; 1.0 = full influence, 0.0 = ignored
 
 # Cross-coalition (JSD) settings
 BRIDGING_MIN_DOWNVOTES_FOR_JSD = 5  # Need this many downvotes with known demos to compute JSD
-BRIDGING_UPVOTE_DIVERSITY_WEIGHT = 0.8  # w1 in composite when JSD is available
-BRIDGING_CROSS_COALITION_WEIGHT = 0.2   # w2 in composite when JSD is available
+BRIDGING_UPVOTE_DIVERSITY_WEIGHT = 0.7  # w1 in composite when JSD is available
+BRIDGING_CROSS_COALITION_WEIGHT = 0.3   # w2 in composite when JSD is available
 
 
 def _load_zipcode_geo() -> None:
@@ -396,6 +398,7 @@ def _ensure_user_demo_cache() -> None:
 
 _population_baseline: dict[str, dict[str, float]] = {}
 _population_baseline_built = False
+_max_idea_reactions: int = BRIDGING_ENGAGEMENT_REFERENCE_FALLBACK
 
 
 def _build_population_baseline() -> None:
@@ -403,8 +406,12 @@ def _build_population_baseline() -> None:
 
     This is the baseline for KL/JSD-based diversity scoring. A bridging score of 1.0
     means the idea's upvote distribution matches the overall voter population.
+
+    Also computes `_max_idea_reactions` — the highest total reaction count across
+    all ideas — used as the engagement factor reference so that the score is
+    relative to the most-engaged-with idea.
     """
-    global _population_baseline, _population_baseline_built
+    global _population_baseline, _population_baseline_built, _max_idea_reactions
     if _population_baseline_built:
         return
     _population_baseline_built = True
@@ -415,6 +422,14 @@ def _build_population_baseline() -> None:
     if reactions_df.empty:
         log.warning("No reactions data — population baseline will be empty")
         return
+
+    # Compute max reactions per idea for engagement factor reference
+    if "reactable_id" in reactions_df.columns:
+        per_idea_counts = reactions_df["reactable_id"].value_counts()
+        _max_idea_reactions = int(per_idea_counts.max()) if len(per_idea_counts) > 0 else BRIDGING_ENGAGEMENT_REFERENCE_FALLBACK
+    else:
+        _max_idea_reactions = BRIDGING_ENGAGEMENT_REFERENCE_FALLBACK
+    log.info("Max idea reactions (engagement reference): %d", _max_idea_reactions)
 
     # Get unique voter user_ids (users who have reacted to at least one idea)
     voter_ids = set()
@@ -451,7 +466,7 @@ def _build_population_baseline() -> None:
 def invalidate_cache() -> None:
     """Clear cached lookups (call after data refresh)."""
     global _user_demo_cache, _email_demo_cache, _userid_email_map, _ZIPCODE_GEO, _ZIPCODE_GEO_LOADED
-    global _population_baseline, _population_baseline_built
+    global _population_baseline, _population_baseline_built, _max_idea_reactions
     _user_demo_cache = {}
     _email_demo_cache = {}
     _userid_email_map = {}
@@ -459,6 +474,7 @@ def invalidate_cache() -> None:
     _ZIPCODE_GEO_LOADED = False
     _population_baseline = {}
     _population_baseline_built = False
+    _max_idea_reactions = BRIDGING_ENGAGEMENT_REFERENCE_FALLBACK
 
 
 # ---------------------------------------------------------------------------
@@ -652,8 +668,8 @@ def _compute_bridging_score(
     engagement_conf = 1.0 - math.exp(-total_votes / BRIDGING_ENGAGEMENT_SCALE)
     result["engagement_confidence"] = round(engagement_conf, 4)
 
-    # Engagement factor: log curve rewarding higher participation volume
-    engagement_factor = min(1.0, math.log1p(total_votes) / math.log1p(BRIDGING_ENGAGEMENT_REFERENCE))
+    # Engagement factor: log curve relative to the most-reacted idea
+    engagement_factor = min(1.0, math.log1p(total_votes) / math.log1p(_max_idea_reactions))
     result["engagement_factor"] = round(engagement_factor, 4)
 
     # Demographic confidence: min(1, known / threshold)
@@ -740,7 +756,11 @@ def _compute_bridging_score(
         diversity_composite = upvote_diversity
 
     # Final bridging score
-    bridging_score = engagement_conf * demo_conf * approval_factor * engagement_factor * diversity_composite * 100
+    # Approval and engagement factors are raised to their respective weights
+    # so that weight=1.0 means full influence and weight=0.0 means no influence.
+    weighted_approval = approval_factor ** BRIDGING_APPROVAL_WEIGHT
+    weighted_engagement = engagement_factor ** BRIDGING_ENGAGEMENT_WEIGHT
+    bridging_score = engagement_conf * demo_conf * weighted_approval * weighted_engagement * diversity_composite * 100
     result["bridging_score"] = round(bridging_score, 2)
 
     # Confidence level
