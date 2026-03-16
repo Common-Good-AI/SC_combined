@@ -1,4 +1,7 @@
 const ParticipationTab = {
+  props: {
+    preloaded: { type: Object, default: () => ({}) },
+  },
   template: `
     <div>
       <div v-if="loading" class="loading">Loading participation data…</div>
@@ -150,17 +153,12 @@ const ParticipationTab = {
 
   async mounted() {
     try {
-      const [pRes, aRes, tRes, sRes] = await Promise.all([
-        fetch('/api/analytics/participants'),
-        fetch('/api/analytics/actions'),
-        fetch('/api/analytics/participation-timeline'),
-        fetch('/api/analytics/participation-timeline/by-source'),
-      ]);
-      this.participants      = await pRes.json();
-      this.actions           = await aRes.json();
-      const tData            = await tRes.json();
+      // Use preloaded data from the app loading screen
+      this.participants      = this.preloaded.participants || {};
+      this.actions           = this.preloaded.actions || {};
+      const tData            = this.preloaded.timeline || {};
       this.timeline          = tData.timeline || [];
-      const sData            = await sRes.json();
+      const sData            = this.preloaded.sourceTimeline || {};
       this.participantsTimeline = sData.timeline || [];
 
       // Default date range to full span of data
@@ -258,15 +256,15 @@ const ParticipationTab = {
           labels,
           datasets: isDaily
             ? [
-                mkDataset('Surveys',   'surveys',   '#3b82f6', 'rgba(59,130,246,.7)'),
-                mkDataset('Ideas',     'ideas',     '#22c55e', 'rgba(34,197,94,.7)'),
-                mkDataset('Reactions', 'reactions', '#f59e0b', 'rgba(245,158,11,.7)'),
+                mkDataset('Surveys',   'surveys',   '#0564B8', 'rgba(5,100,184,.7)'),
+                mkDataset('Ideas',     'ideas',     '#059669', 'rgba(5,150,105,.7)'),
+                mkDataset('Reactions', 'reactions', '#d97706', 'rgba(217,119,6,.7)'),
               ]
             : [
-                mkDataset('Total',     'total',     '#1e3a5f', 'rgba(30,58,95,.06)'),
-                mkDataset('Surveys',   'surveys',   '#3b82f6', 'transparent'),
-                mkDataset('Ideas',     'ideas',     '#22c55e', 'transparent'),
-                mkDataset('Reactions', 'reactions', '#f59e0b', 'transparent'),
+                mkDataset('Total',     'total',     '#003366', 'rgba(0,51,102,.06)'),
+                mkDataset('Surveys',   'surveys',   '#0564B8', 'transparent'),
+                mkDataset('Ideas',     'ideas',     '#059669', 'transparent'),
+                mkDataset('Reactions', 'reactions', '#d97706', 'transparent'),
               ],
         },
         options: {
@@ -279,15 +277,15 @@ const ParticipationTab = {
               ticks: {
                 maxTicksLimit: 10,
                 maxRotation: 0,
-                color: '#94a3b8',
+                color: '#9ca3af',
                 font: { size: 11 },
               },
               border: { display: false },
             },
             y: {
               beginAtZero: true,
-              ticks: { precision: 0, color: '#94a3b8', font: { size: 11 } },
-              grid: { color: 'rgba(0,0,0,.05)' },
+              ticks: { precision: 0, color: '#9ca3af', font: { size: 11 } },
+              grid: { color: 'rgba(0,0,0,.04)' },
               border: { display: false },
               stacked: isDaily,
             },
@@ -295,14 +293,14 @@ const ParticipationTab = {
           plugins: {
             legend: {
               position: 'top',
-              labels: { boxWidth: 10, padding: 16, font: { size: 12 }, color: '#475569' },
+              labels: { boxWidth: 10, padding: 16, font: { size: 12 }, color: '#374151' },
             },
             tooltip: {
               mode: 'index',
               intersect: false,
-              backgroundColor: '#1e293b',
-              titleColor: '#f1f5f9',
-              bodyColor: '#cbd5e1',
+              backgroundColor: '#003366',
+              titleColor: '#C2DFED',
+              bodyColor: '#C2DFED',
               padding: 10,
               cornerRadius: 6,
             },
@@ -311,14 +309,14 @@ const ParticipationTab = {
             x: {
               grid: { display: false },
               stacked: true,
-              ticks: { maxTicksLimit: 10, maxRotation: 0, color: '#94a3b8', font: { size: 11 } },
+              ticks: { maxTicksLimit: 10, maxRotation: 0, color: '#9ca3af', font: { size: 11 } },
               border: { display: false },
             },
             y: {
               beginAtZero: true,
               stacked: true,
-              ticks: { precision: 0, color: '#94a3b8', font: { size: 11 } },
-              grid: { color: 'rgba(0,0,0,.05)' },
+              ticks: { precision: 0, color: '#9ca3af', font: { size: 11 } },
+              grid: { color: 'rgba(0,0,0,.04)' },
               border: { display: false },
             },
           }}),
@@ -352,15 +350,15 @@ const ParticipationTab = {
 
       const datasets = isDaily
         ? [
-            mkDs('Confirmed',  'confirmed',  '#1e3a5f', 'rgba(30,58,95,.7)'),
-            mkDs('Email-only', 'email_only', '#3b82f6', 'rgba(59,130,246,.7)'),
-            mkDs('Anonymous',  'anonymous',  '#94a3b8', 'rgba(148,163,184,.7)'),
+            mkDs('Confirmed',  'confirmed',  '#003366', 'rgba(0,51,102,.7)'),
+            mkDs('Email-only', 'email_only', '#0564B8', 'rgba(5,100,184,.7)'),
+            mkDs('Anonymous',  'anonymous',  '#9ca3af', 'rgba(156,163,175,.7)'),
           ]
         : [
-            mkDs('Total',      'total',      '#1e3a5f', 'rgba(30,58,95,.06)'),
-            mkDs('Confirmed',  'confirmed',  '#3b82f6', 'transparent'),
-            mkDs('Email-only', 'email_only', '#22c55e', 'transparent'),
-            mkDs('Anonymous',  'anonymous',  '#94a3b8', 'transparent'),
+            mkDs('Total',      'total',      '#003366', 'rgba(0,51,102,.06)'),
+            mkDs('Confirmed',  'confirmed',  '#0564B8', 'transparent'),
+            mkDs('Email-only', 'email_only', '#36A0E0', 'transparent'),
+            mkDs('Anonymous',  'anonymous',  '#9ca3af', 'transparent'),
           ];
 
       this._sourceChart = new Chart(ctx, {
@@ -388,14 +386,14 @@ const ParticipationTab = {
           plugins: {
             legend: {
               position: 'top',
-              labels: { boxWidth: 10, padding: 14, font: { size: 12 }, color: '#475569' },
+              labels: { boxWidth: 10, padding: 14, font: { size: 12 }, color: '#374151' },
             },
             tooltip: {
               mode: 'index',
               intersect: false,
-              backgroundColor: '#1e293b',
-              titleColor: '#f1f5f9',
-              bodyColor: '#cbd5e1',
+              backgroundColor: '#003366',
+              titleColor: '#C2DFED',
+              bodyColor: '#C2DFED',
               padding: 10,
               cornerRadius: 6,
             },
@@ -418,7 +416,7 @@ const ParticipationTab = {
               this.participants.email_only_users || 0,
               this.participants.anonymous_users || 0,
             ],
-            backgroundColor: ['#1e3a5f', '#3b82f6', '#94a3b8'],
+            backgroundColor: ['#003366', '#0564B8', '#C2DFED'],
             borderWidth: 2,
             borderColor: '#fff',
           }],
@@ -427,7 +425,7 @@ const ParticipationTab = {
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { position: 'right', labels: { boxWidth: 12, font: { size: 12 }, color: '#475569' } },
+            legend: { position: 'right', labels: { boxWidth: 12, font: { size: 12 }, color: '#374151' } },
           },
         },
       });

@@ -3,32 +3,97 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GoVocal Admin Dashboard</title>
+  <title>SC Forum · Community Engagement Dashboard</title>
   <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="https://use.typekit.net/sze3jop.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
   <div id="app">
+    <!-- Loading screen -->
+    <div v-if="appLoading" class="loading-screen">
+      <div class="loading-card">
+        <svg class="loading-logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2"/>
+          <path d="M10 16.5C10 14 12 12 16 12C20 12 22 14 22 16.5C22 19 20 21 16 21C12 21 10 19 10 16.5Z" stroke="currentColor" stroke-width="2"/>
+          <circle cx="16" cy="10" r="2" fill="currentColor"/>
+          <circle cx="10" cy="20" r="2" fill="currentColor"/>
+          <circle cx="22" cy="20" r="2" fill="currentColor"/>
+        </svg>
+        <h2 class="loading-title">SC Forum Dashboard</h2>
+        <div v-if="loadError" class="loading-error">
+          <p>{{ loadError }}</p>
+          <button class="loading-retry" @click="location.reload()">Retry</button>
+        </div>
+        <template v-else>
+          <div class="loading-bar-track">
+            <div class="loading-bar-fill" :style="{ width: loadProgress + '%' }"></div>
+          </div>
+          <p class="loading-pct">{{ loadProgress }}%</p>
+          <p class="loading-step">{{ loadStepLabel }}</p>
+          <p v-if="totalRecords" class="loading-records">{{ totalRecords.toLocaleString() }} records</p>
+        </template>
+      </div>
+    </div>
+
+    <!-- Main app (hidden during load) -->
+    <template v-else>
     <header class="header">
-      <h1>GoVocal Admin Dashboard</h1>
+      <div class="header-inner">
+        <div class="brand">
+          <svg class="brand-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2"/>
+            <path d="M10 16.5C10 14 12 12 16 12C20 12 22 14 22 16.5C22 19 20 21 16 21C12 21 10 19 10 16.5Z" stroke="currentColor" stroke-width="2"/>
+            <circle cx="16" cy="10" r="2" fill="currentColor"/>
+            <circle cx="10" cy="20" r="2" fill="currentColor"/>
+            <circle cx="22" cy="20" r="2" fill="currentColor"/>
+          </svg>
+          <div class="brand-text">
+            <span class="brand-name">SC Forum</span>
+            <span class="brand-tagline">Community Engagement Dashboard</span>
+          </div>
+        </div>
+      </div>
     </header>
 
-    <nav class="tabs">
-      <button
-        :class="['tab-btn', { active: activeTab === 'participation' }]"
-        @click="activeTab = 'participation'"
-      >Participation</button>
-      <button
-        :class="['tab-btn', { active: activeTab === 'ideas' }]"
-        @click="activeTab = 'ideas'"
-      >Ideas</button>
+    <nav class="nav-bar">
+      <div class="nav-inner">
+        <button
+          :class="['nav-link', { active: activeTab === 'participation' }]"
+          @click="activeTab = 'participation'"
+        >
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/>
+          </svg>
+          Participation
+        </button>
+        <button
+          :class="['nav-link', { active: activeTab === 'ideas' }]"
+          @click="activeTab = 'ideas'"
+        >
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z"/>
+          </svg>
+          Ideas & Insights
+        </button>
+      </div>
     </nav>
 
     <main class="content">
-      <participation-tab v-if="activeTab === 'participation'"></participation-tab>
-      <ideas-tab v-if="activeTab === 'ideas'"></ideas-tab>
+      <participation-tab v-if="activeTab === 'participation'" :preloaded="preloaded"></participation-tab>
+      <ideas-tab v-if="activeTab === 'ideas'" :preloaded="preloaded"></ideas-tab>
     </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <p>The South Carolina Forum · Community Engagement Dashboard</p>
+      </div>
+    </footer>
+    </template>
   </div>
 
   <!-- Components (order matters: leaf components first) -->
