@@ -1,6 +1,7 @@
 const IdeaDetail = {
   props: {
     ideaId: { type: String, required: true },
+    scoringMethod: { type: String, default: 'jsd' },
   },
   emits: ['close'],
   template: `
@@ -42,9 +43,11 @@ const IdeaDetail = {
                 <span :class="bridgingClass">{{ bridgingLabel }}</span>
               </div>
               <div class="stat-label">
-                Bridging Score
+                Consensus Score
                 <span class="info-icon"
-                      @mouseenter="showTooltip($event, 'Measures cross-demographic appeal (0-100). Factors in approval ratio (likes vs dislikes), engagement volume (more reactions = higher weight), demographic diversity (Political Lean 50%, Urban/Rural 20%, Age 10%, Race 10%, Region 10%), and engagement level. Higher = wider cross-group appeal with strong approval and participation.')"
+                      @mouseenter="showTooltip($event, scoringMethod === 'wmga'
+                        ? 'Weighted Mean Group Approval (0-100). Population-weighted average of each demographic group\\'s Bayesian-smoothed approval rate. Higher = broader cross-group support.'
+                        : 'Measures cross-demographic consensus (0-100). Combines approval rate (likes vs total), demographic diversity of supporters (Political Lean 50%, Urban/Rural 20%, Age 10%, Race 10%, Region 10%), and a polarization penalty if groups disagree sharply. Higher = broader cross-group support.')"
                       @mouseleave="hideTooltip">
                   &#9432;
                 </span>
@@ -53,29 +56,24 @@ const IdeaDetail = {
           </div>
 
           <!-- Bridging dimension breakdown -->
-          <div v-if="idea.bridging && idea.bridging.bridging_score != null" class="demo-section">
-            <h4>Bridging Score Breakdown</h4>
+          <div v-if="idea.bridging && activeScore != null" class="demo-section">
+            <h4>Consensus Score Breakdown
+              <span style="font-size:0.78rem; font-weight:400; color:#94a3b8; margin-left:6px;">
+                ({{ scoringMethod === 'wmga' ? 'WMGA' : 'JSD' }})
+              </span>
+            </h4>
             <div class="stat-grid">
-              <div class="stat-card" v-if="idea.bridging.approval_factor != null">
-                <div class="stat-value" style="font-size:1.1rem">{{ idea.bridging.approval_factor.toFixed(3) }}</div>
+              <div class="stat-card" v-if="idea.bridging.approval_ratio != null">
+                <div class="stat-value" style="font-size:1.1rem">{{ (idea.bridging.approval_ratio * 100).toFixed(1) }}%</div>
                 <div class="stat-label">
-                  Approval Factor
+                  Approval Rate
                   <span class="info-icon"
-                        @mouseenter="showTooltip($event, 'Ratio of likes to total reactions (0–1). Higher = stronger overall approval.')"
+                        @mouseenter="showTooltip($event, 'Percentage of reactions that are likes.')"
                         @mouseleave="hideTooltip">&#9432;</span>
                 </div>
               </div>
-              <div class="stat-card" v-if="idea.bridging.engagement_factor != null">
-                <div class="stat-value" style="font-size:1.1rem">{{ idea.bridging.engagement_factor.toFixed(3) }}</div>
-                <div class="stat-label">
-                  Engagement Factor
-                  <span class="info-icon"
-                        @mouseenter="showTooltip($event, 'Measures reaction volume relative to the most-reacted idea (0–1). An idea with the highest total reactions scores 1.000.')"
-                        @mouseleave="hideTooltip">&#9432;</span>
-                </div>
-              </div>
-              <div class="stat-card" v-for="(val, dim) in idea.bridging.per_dimension_scores" :key="dim">
-                <div class="stat-value" style="font-size:1.1rem">{{ fmtScore(val) }}</div>
+              <div class="stat-card" v-for="(val, dim) in activeDimensionScores" :key="dim">
+                <div class="stat-value" style="font-size:1.1rem">{{ scoringMethod === 'wmga' ? (val * 100).toFixed(1) + '%' : fmtScore(val) }}</div>
                 <div class="stat-label">{{ formatDim(dim) }}</div>
               </div>
             </div>
@@ -172,16 +170,28 @@ const IdeaDetail = {
   },
 
   computed: {
+    activeScore() {
+      if (!this.idea || !this.idea.bridging) return null;
+      return this.scoringMethod === 'wmga' ? this.idea.bridging.wmga_score : this.idea.bridging.consensus_score;
+    },
     bridgingLabel() {
-      if (!this.idea || !this.idea.bridging || this.idea.bridging.bridging_score == null) return 'N/A';
-      return this.idea.bridging.bridging_score.toFixed(1);
+      const s = this.activeScore;
+      if (s == null) return 'N/A';
+      return s.toFixed(1);
     },
     bridgingClass() {
-      if (!this.idea || !this.idea.bridging || this.idea.bridging.bridging_score == null) return 'bridging-badge bridging-na';
-      const s = this.idea.bridging.bridging_score;
+      const s = this.activeScore;
+      if (s == null) return 'bridging-badge bridging-na';
       if (s >= 75) return 'bridging-badge bridging-high';
       if (s >= 50) return 'bridging-badge bridging-med';
       return 'bridging-badge bridging-low';
+    },
+    activeDimensionScores() {
+      if (!this.idea || !this.idea.bridging) return {};
+      if (this.scoringMethod === 'wmga') {
+        return this.idea.bridging.wmga_per_dimension || {};
+      }
+      return this.idea.bridging.per_dimension_scores || {};
     },
     formattedDate() {
       if (!this.idea?.created_at) return null;

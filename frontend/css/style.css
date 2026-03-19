@@ -315,6 +315,22 @@ body {
   margin-bottom: 1rem;
 }
 
+.export-btn {
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--white);
+  background: var(--blue);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.export-btn:hover {
+  background: var(--blue-hover);
+}
+
 /* ── Table ─────────────────────────────────────────────────────────── */
 .table-container {
   background: var(--white);
@@ -824,4 +840,67 @@ tr.clickable:hover td { background: rgba(194,223,237,.18); }
   background: var(--blue);
   border-color: var(--blue);
   color: var(--white);
+}
+
+/* Demographic baseline grid */
+.demo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 1.25rem;
+}
+.demo-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+}
+.demo-card h4 {
+  margin: 0 0 .25rem;
+  font-size: .95rem;
+  color: #1e293b;
+}
+.demo-known-info {
+  font-size: .78rem;
+  color: #94a3b8;
+  margin-bottom: .75rem;
+}
+.demo-bar-list {
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+}
+.demo-bar-row {
+  display: grid;
+  grid-template-columns: 160px 1fr 90px;
+  align-items: center;
+  gap: .5rem;
+}
+.demo-bar-label {
+  font-size: .82rem;
+  color: #334155;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.demo-bar-track {
+  height: 14px;
+  background: #e2e8f0;
+  border-radius: 7px;
+  overflow: hidden;
+}
+.demo-bar-fill {
+  height: 100%;
+  border-radius: 7px;
+  transition: width .4s ease;
+  min-width: 2px;
+}
+.demo-bar-value {
+  font-size: .8rem;
+  color: #475569;
+  font-variant-numeric: tabular-nums;
+}
+.demo-bar-count {
+  color: #94a3b8;
+  font-size: .75rem;
 }

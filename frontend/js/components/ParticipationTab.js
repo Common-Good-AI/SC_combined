@@ -37,6 +37,42 @@ const ParticipationTab = {
           </div>
         </div>
 
+        <!-- GoVocal Participation Rate cards -->
+        <div class="card-row" v-if="participationRate && participationRate.rates">
+          <div class="card">
+            <div class="label">GoVocal Participation Rate (24h)</div>
+            <div class="value">{{ participationRate.rates['24h'] ? participationRate.rates['24h'].rate_pct + '%' : '–' }}</div>
+            <div class="sub">
+              {{ fmt(participationRate.rates['24h'] && participationRate.rates['24h'].users) }} users /
+              {{ fmt(participationRate.rates['24h'] && participationRate.rates['24h'].visits) }} visits
+            </div>
+          </div>
+          <div class="card">
+            <div class="label">GoVocal Participation Rate (72h)</div>
+            <div class="value">{{ participationRate.rates['72h'] ? participationRate.rates['72h'].rate_pct + '%' : '–' }}</div>
+            <div class="sub">
+              {{ fmt(participationRate.rates['72h'] && participationRate.rates['72h'].users) }} users /
+              {{ fmt(participationRate.rates['72h'] && participationRate.rates['72h'].visits) }} visits
+            </div>
+          </div>
+          <div class="card">
+            <div class="label">GoVocal Participation Rate (7d)</div>
+            <div class="value">{{ participationRate.rates['7d'] ? participationRate.rates['7d'].rate_pct + '%' : '–' }}</div>
+            <div class="sub">
+              {{ fmt(participationRate.rates['7d'] && participationRate.rates['7d'].users) }} users /
+              {{ fmt(participationRate.rates['7d'] && participationRate.rates['7d'].visits) }} visits
+            </div>
+          </div>
+          <div class="card">
+            <div class="label">GoVocal Participation Rate (All Time)</div>
+            <div class="value">{{ participationRate.all_time ? participationRate.all_time.rate_pct + '%' : '–' }}</div>
+            <div class="sub">
+              {{ fmt(participationRate.all_time && participationRate.all_time.users) }} users /
+              {{ fmt(participationRate.all_time && participationRate.all_time.visits) }} visits
+            </div>
+          </div>
+        </div>
+
         <!-- Participation over time chart -->
         <div class="chart-container">
           <!-- Chart header: title + controls -->
@@ -89,6 +125,37 @@ const ParticipationTab = {
           </div>
         </div>
 
+        <!-- Demographic Baseline Breakdown -->
+        <div class="chart-container" v-if="demographics && demographics.dimensions">
+          <h3>Platform Demographic Baseline <span style="font-size:.75em;color:#64748b;font-weight:normal">(all voters)</span></h3>
+          <p style="color:#64748b;font-size:.85em;margin:-.25em 0 1em">
+            Distribution of demographics across {{ fmt(demographics.total_voters) }} voters who reacted to ideas.
+            This baseline is used to compute consensus (bridging) scores.
+          </p>
+          <div class="demo-grid">
+            <template v-for="dim in demoOrder" :key="dim">
+              <div class="demo-card" v-if="demographics.dimensions[dim]">
+                <h4>{{ dimLabel(dim) }}</h4>
+                <div class="demo-known-info">
+                  {{ fmt(demographics.dimensions[dim].total_known) }} known ·
+                  {{ fmt(demographics.dimensions[dim].total_unknown) }} unknown
+                </div>
+                <div class="demo-bar-list">
+                  <div class="demo-bar-row" v-for="(pct, cat) in demographics.dimensions[dim].distribution" :key="cat">
+                    <div class="demo-bar-label">{{ cat }}</div>
+                    <div class="demo-bar-track">
+                      <div class="demo-bar-fill" :style="{ width: (pct * 100) + '%', backgroundColor: dimColor(dim) }"></div>
+                    </div>
+                    <div class="demo-bar-value">{{ (pct * 100).toFixed(1) }}%
+                      <span class="demo-bar-count">({{ fmt(demographics.dimensions[dim].counts[cat]) }})</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
       </template>
     </div>
   `,
@@ -101,6 +168,9 @@ const ParticipationTab = {
       actions: {},
       timeline: [],
       participantsTimeline: [],
+      visits: [],
+      participationRate: {},
+      demographics: {},
       chartMode: 'cumulative',
       sourceMode: 'cumulative',
       dateFrom: '',
@@ -131,6 +201,12 @@ const ParticipationTab = {
       });
     },
 
+    visitsMap() {
+      const m = {};
+      for (const v of this.visits) m[v.date] = v.visitors;
+      return m;
+    },
+
     filteredParticipantsTimeline() {
       return this.participantsTimeline.filter(d => {
         if (this.dateFrom && d.date < this.dateFrom) return false;
@@ -149,6 +225,10 @@ const ParticipationTab = {
         return { date: d.date, ...totals };
       });
     },
+
+    demoOrder() {
+      return ['political_lean', 'age_bucket', 'race', 'region', 'urban_rural'];
+    },
   },
 
   async mounted() {
@@ -160,6 +240,10 @@ const ParticipationTab = {
       this.timeline          = tData.timeline || [];
       const sData            = this.preloaded.sourceTimeline || {};
       this.participantsTimeline = sData.timeline || [];
+      const vData            = this.preloaded.visits || {};
+      this.visits            = vData.visits || [];
+      this.participationRate = this.preloaded.participationRate || {};
+      this.demographics      = this.preloaded.demographics || {};
 
       // Default date range to full span of data
       if (this.timeline.length) {
@@ -189,6 +273,28 @@ const ParticipationTab = {
     fmt(n) {
       if (n == null) return '–';
       return Number(n).toLocaleString();
+    },
+
+    dimLabel(dim) {
+      const labels = {
+        political_lean: 'Political Lean',
+        age_bucket: 'Age Group',
+        race: 'Race / Ethnicity',
+        region: 'Region',
+        urban_rural: 'Urban / Rural',
+      };
+      return labels[dim] || dim;
+    },
+
+    dimColor(dim) {
+      const colors = {
+        political_lean: '#6366f1',
+        age_bucket: '#0564B8',
+        race: '#059669',
+        region: '#d97706',
+        urban_rural: '#e11d48',
+      };
+      return colors[dim] || '#003366';
     },
 
     setMode(mode) {
@@ -250,23 +356,48 @@ const ParticipationTab = {
         fill: this.chartMode === 'cumulative' && label === 'Total' ? 'origin' : false,
       });
 
+      // Build visitors dataset from visits data, aligned to the same date labels
+      const vm = this.visitsMap;
+      let visitorsData;
+      if (this.chartMode === 'cumulative') {
+        let cumVisits = 0;
+        visitorsData = labels.map(d => { cumVisits += (vm[d] || 0); return cumVisits; });
+      } else {
+        visitorsData = labels.map(d => vm[d] || 0);
+      }
+      const visitorsDs = {
+        type: 'line',
+        label: 'Visitors',
+        data: visitorsData,
+        borderColor: '#e11d48',
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        borderDash: [5, 3],
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        tension: 0.35,
+        fill: false,
+        yAxisID: 'y1',
+      };
+
+      const datasets = isDaily
+        ? [
+            mkDataset('Surveys',   'surveys',   '#0564B8', 'rgba(5,100,184,.7)'),
+            mkDataset('Ideas',     'ideas',     '#059669', 'rgba(5,150,105,.7)'),
+            mkDataset('Reactions', 'reactions', '#d97706', 'rgba(217,119,6,.7)'),
+            visitorsDs,
+          ]
+        : [
+            mkDataset('Total',     'total',     '#003366', 'rgba(0,51,102,.06)'),
+            mkDataset('Surveys',   'surveys',   '#0564B8', 'transparent'),
+            mkDataset('Ideas',     'ideas',     '#059669', 'transparent'),
+            mkDataset('Reactions', 'reactions', '#d97706', 'transparent'),
+            visitorsDs,
+          ];
+
       this._timelineChart = new Chart(ctx, {
         type: isDaily ? 'bar' : 'line',
-        data: {
-          labels,
-          datasets: isDaily
-            ? [
-                mkDataset('Surveys',   'surveys',   '#0564B8', 'rgba(5,100,184,.7)'),
-                mkDataset('Ideas',     'ideas',     '#059669', 'rgba(5,150,105,.7)'),
-                mkDataset('Reactions', 'reactions', '#d97706', 'rgba(217,119,6,.7)'),
-              ]
-            : [
-                mkDataset('Total',     'total',     '#003366', 'rgba(0,51,102,.06)'),
-                mkDataset('Surveys',   'surveys',   '#0564B8', 'transparent'),
-                mkDataset('Ideas',     'ideas',     '#059669', 'transparent'),
-                mkDataset('Reactions', 'reactions', '#d97706', 'transparent'),
-              ],
-        },
+        data: { labels, datasets },
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -288,6 +419,14 @@ const ParticipationTab = {
               grid: { color: 'rgba(0,0,0,.04)' },
               border: { display: false },
               stacked: isDaily,
+            },
+            y1: {
+              position: 'right',
+              beginAtZero: true,
+              ticks: { precision: 0, color: '#e11d48', font: { size: 11 } },
+              grid: { display: false },
+              border: { display: false },
+              title: { display: true, text: 'Visitors', color: '#e11d48', font: { size: 11 } },
             },
           },
           plugins: {
@@ -318,6 +457,15 @@ const ParticipationTab = {
               ticks: { precision: 0, color: '#9ca3af', font: { size: 11 } },
               grid: { color: 'rgba(0,0,0,.04)' },
               border: { display: false },
+            },
+            y1: {
+              position: 'right',
+              beginAtZero: true,
+              stacked: false,
+              ticks: { precision: 0, color: '#e11d48', font: { size: 11 } },
+              grid: { display: false },
+              border: { display: false },
+              title: { display: true, text: 'Visitors', color: '#e11d48', font: { size: 11 } },
             },
           }}),
         },

@@ -5,14 +5,19 @@ const DATA_ENDPOINTS = [
   { key: 'actions',            url: '/api/analytics/actions',                   label: 'Actions' },
   { key: 'timeline',           url: '/api/analytics/participation-timeline',    label: 'Timeline' },
   { key: 'sourceTimeline',     url: '/api/analytics/participation-timeline/by-source', label: 'Source timeline' },
+  { key: 'visits',             url: '/api/analytics/visits',                    label: 'Visits' },
+  { key: 'participationRate',  url: '/api/analytics/participation-rate',        label: 'Participation rate' },
   { key: 'ideas',              url: '/api/ideas',                               label: 'Ideas & bridging' },
+  { key: 'demographics',       url: '/api/analytics/demographics-baseline',     label: 'Demographics' },
   { key: 'themes',             url: '/api/analytics/idea-selections',           label: 'Survey themes' },
+  { key: 'tags',               url: '/api/analytics/idea-tags',                 label: 'Idea tags' },
+  { key: 'votesByTag',         url: '/api/analytics/votes-by-tag',              label: 'Votes by tag' },
 ];
 
 const app = createApp({
   data() {
     return {
-      activeTab: 'participation',
+      activeTab: 'summary',
       // Loading state
       appLoading: true,
       loadError: null,
@@ -57,6 +62,7 @@ const app = createApp({
 });
 
 // Register components
+app.component('summary-tab', SummaryTab);
 app.component('participation-tab', ParticipationTab);
 app.component('ideas-tab', IdeasTab);
 app.component('idea-detail', IdeaDetail);

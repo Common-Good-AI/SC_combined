@@ -16,7 +16,7 @@ A Flask-based backend that aggregates civic-engagement data from **GoVocal** and
   - [Data](#data)
   - [Analytics](#analytics)
   - [Ideas](#ideas)
-- [Bridging Score Algorithm](#bridging-score-algorithm)
+- [Consensus Score Algorithm](#consensus-score-algorithm)
 - [Deployment](#deployment)
 
 ---
@@ -371,7 +371,7 @@ Daily new unique participants, broken down by tier (confirmed account, email-onl
 
 #### `GET /api/ideas`
 
-Unified view of every ideation idea, sorted by total reactions (descending). Each entry includes metadata, author demographics, reaction totals, per-demographic breakdowns of upvotes/downvotes, and a bridging score.
+Unified view of every ideation idea, sorted by total reactions (descending). Each entry includes metadata, author demographics, reaction totals, per-demographic breakdowns of upvotes/downvotes, and a consensus score.
 
 ```json
 [
@@ -404,13 +404,11 @@ Unified view of every ideation idea, sorted by total reactions (descending). Eac
       }
     },
     "bridging": {
-      "bridging_score": 62.3,
+      "consensus_score": 62.3,
       "confidence_level": "high",
       "demographic_coverage": 0.85,
-      "engagement_confidence": 0.98,
       "demographic_confidence": 1.0,
-      "approval_factor": 0.82,
-      "engagement_factor": 0.97,
+      "approval_ratio": 0.9048,
       "per_dimension_scores": {
         "political_lean": 0.78,
         "age_bucket": 0.82,
@@ -425,9 +423,7 @@ Unified view of every ideation idea, sorted by total reactions (descending). Eac
         "region": 0.02,
         "urban_rural": 0.01
       },
-      "polarization_penalty": 0.19,
-      "downvote_diversity": 0.72,
-      "cross_coalition_used": true
+      "polarization_penalty": 0.19
     }
   }
 ]
@@ -443,89 +439,50 @@ Returns a single idea with the same shape as above. Returns `404` if the idea is
 
 #### `GET /api/ideas/bridging`
 
-Returns ideas sorted by **bridging score** (descending), filtered to only include ideas that have a computable score (≥8 reactions with known demographics).
+Returns ideas sorted by **consensus score** (descending), filtered to only include ideas that have a computable score (≥20 reactions with known demographics).
 
 Useful for surfacing ideas with broad cross-demographic support.
 
 ---
 
-## Bridging Score Algorithm
+## Consensus Score Algorithm
 
-The **bridging score** measures how broadly an idea is supported across demographic groups, inspired by bridging algorithms used in platforms like Pol.is. Unlike Pol.is (which infers groups from voting patterns), this implementation uses direct demographic data.
+The **consensus score** measures how broadly an idea is supported across demographic groups, inspired by bridging algorithms used in platforms like Pol.is. Unlike Pol.is (which infers groups from voting patterns), this implementation uses direct demographic data.
 
-### Score Components
+### Formula
 
-The final bridging score (0–100) is computed as:
-
-```
-bridging_score = engagement_confidence × demographic_confidence × approval_factor × engagement_factor × diversity_composite × polarization_factor × 100
-```
-
-where `polarization_factor = 1 - 0.6 × weighted_polarization` (see section 6 below).
-
-#### 1. Engagement Confidence (0–1)
-
-A sigmoid function of total votes that prevents low-vote ideas from scoring high:
+The final consensus score (0–100) is:
 
 ```
-engagement_confidence = 1 - exp(-total_votes / 10)
+consensus_score = Approval × Diversity × Confidence × 100
 ```
 
-| Total Votes | Confidence |
-|-------------|------------|
-| 10          | 63%        |
-| 20          | 86%        |
-| 30          | 95%        |
+This keeps the score simple and explainable: an idea must be **approved**, **demographically diverse**, and **backed by sufficient data** to score well.
 
-#### 2. Demographic Confidence (0–1)
+#### 1. Approval (0–1)
 
-Scales by how many reactions have known demographics:
+The straight ratio of upvotes to total votes:
 
 ```
-demographic_confidence = min(1, known_demo_reactions / 30)
+approval = upvotes / total_votes
 ```
 
-If fewer than **15 reactions** have known demographics, the bridging score is `null` (insufficient data).
+| Approval % | Factor |
+|------------|--------|
+| 95%        | 0.95   |
+| 80%        | 0.80   |
+| 60%        | 0.60   |
+| 50%        | 0.50   |
 
-#### 3. Approval Factor (0–1)
+#### 2. Diversity (0–1)
 
-Prioritises ideas with a high like-to-dislike ratio. The approval ratio (upvotes / total votes) is raised to an exponent to produce a moderate penalty curve:
-
-```
-approval_factor = (upvotes / total_votes) ^ 1.5
-```
-
-| Approval % | Factor | Penalty |
-|------------|--------|--------|
-| 95%        | 0.93   | ~7%    |
-| 90%        | 0.85   | ~15%   |
-| 85%        | 0.78   | ~22%   |
-| 75%        | 0.65   | ~35%   |
-| 50%        | 0.35   | ~65%   |
-
-This ensures that an idea with broad demographic support but significant opposition is scored lower than a similarly diverse idea with near-unanimous approval.
-
-#### 4. Engagement Factor (0–1)
-
-A logarithmic curve that rewards ideas with higher total participation. While engagement confidence (above) gates out very-low-vote ideas, this factor provides meaningful differentiation between moderately-voted and highly-voted ideas:
+Measures how well the idea's supporters represent the overall voter population, with a penalty for polarization:
 
 ```
-engagement_factor = min(1.0, log(1 + total_votes) / log(1 + 150))
+diversity = upvote_diversity × polarization_factor
 ```
 
-| Total Votes | Factor | Penalty |
-|-------------|--------|--------|
-| 20          | 0.60   | ~40%   |
-| 40          | 0.74   | ~26%   |
-| 80          | 0.86   | ~14%   |
-| 150         | 1.00   | 0%     |
-| 300+        | 1.00   | 0%     |
-
-This means an idea with 40 likes and 0 dislikes (engagement factor ~0.74) will score lower than an idea with 300 likes and 7 dislikes (engagement factor 1.0, approval factor ~0.97), all else being equal.
-
-#### 5. Diversity Composite (0–1)
-
-Measures how well the idea's upvote distribution matches the overall voter population across five demographic dimensions:
+**Upvote diversity** is the weighted average of per-dimension diversity scores across five demographic dimensions:
 
 | Dimension      | Base Weight |
 |----------------|-------------|
@@ -537,25 +494,16 @@ Measures how well the idea's upvote distribution matches the overall voter popul
 
 **Per-dimension score** = `1 - JS_distance(idea_upvotes, population_baseline)`
 
-where JS distance is the Jensen-Shannon distance (square root of the JS divergence). Using the distance rather than the squared divergence provides better sensitivity to distribution shifts among minority demographic subgroups. A score of 1.0 means the idea's upvoters perfectly mirror the overall voter population for that dimension.
+where JS distance is the Jensen-Shannon distance (square root of the JS divergence). A score of 1.0 means the idea's upvoters perfectly mirror the overall voter population for that dimension. Using the distance (not squared divergence) provides better sensitivity to shifts among minority subgroups.
 
 **Coverage adjustment**: Base weights are scaled by each dimension's data coverage (fraction of reactions with a value for that dimension), then renormalized. This prevents dimensions with sparse data from distorting the score.
 
-#### 6. Polarization Penalty (0–1)
-
-For each demographic dimension, the algorithm computes the **variance of per-group approval rates** — a direct measure of whether different demographic groups feel differently about the idea.
-
-For each group within a dimension (e.g. "Very Liberal", "Moderate", "Very Conservative" within political lean), it calculates `upvotes / total_votes_in_group`. Groups with fewer than 3 votes are excluded. The variance of these approval rates is then normalised to [0, 1], where 0 means all groups approve at the same rate and 1 means maximum polarization.
-
-The per-dimension polarization values are combined using the same coverage-adjusted weights as diversity, then applied as a multiplicative penalty:
+**Polarization penalty**: For each demographic dimension, the algorithm computes the **variance of per-group approval rates** — a direct measure of whether different groups feel differently about the idea. Groups with fewer than 5 votes are excluded. The variance is normalised to [0, 1] and combined using coverage-adjusted weights:
 
 ```
 weighted_polarization = Σ (effective_weight[dim] × polarization[dim])
 polarization_factor = 1 - 0.6 × weighted_polarization
-diversity_composite *= polarization_factor
 ```
-
-This ensures that ideas which are divisive along demographic lines (e.g. all conservatives dislike it while all liberals like it) receive a significant score reduction, even if the upvote distribution looks representative of the overall population.
 
 | Weighted Polarization | Penalty Factor | Score Impact |
 |-----------------------|----------------|-------------|
@@ -564,40 +512,29 @@ This ensures that ideas which are divisive along demographic lines (e.g. all con
 | 0.5                   | 0.70           | -30%        |
 | 1.0                   | 0.40           | -60%        |
 
-#### 7. Cross-Coalition Signal (when available)
+#### 3. Confidence (0–1)
 
-When an idea has **≥5 downvotes with known demographics**, the algorithm also computes a cross-coalition signal:
-
-```
-cross_coalition = 1 - JS_distance(upvote_distribution, downvote_distribution)
-```
-
-If upvoters and downvoters look demographically similar (high cross-coalition score), the idea genuinely cuts across group lines rather than splitting along demographic fault lines.
-
-When cross-coalition is available, the diversity composite becomes:
+Scales the score by how much demographic data is available:
 
 ```
-diversity_composite = 0.7 × upvote_diversity + 0.3 × cross_coalition
+confidence = min(1, known_demo_reactions / 50)
 ```
 
-The polarization penalty is then applied on top of this composite.
+If fewer than **20 reactions** have known demographics, the consensus score is `null` (insufficient data). Full confidence is reached at 50 reactions with known demographics.
 
-### Separate Metrics
+### Reported Metrics
 
-The following are reported separately (not folded into the main score):
-
-- **`approval_factor`**: The approval-ratio multiplier applied to the score.
-- **`engagement_factor`**: The participation-volume multiplier (log curve, 1.0 at 150+ votes).
-- **`downvote_diversity`**: Same calculation as upvote diversity, but on downvotes. Useful for identifying ideas where opposition is non-traditional (spread across demographics rather than concentrated).
+- **`approval_ratio`**: Upvotes / total votes (0–1).
 - **`demographic_coverage`**: Fraction of reactions with known demographics.
-- **`per_dimension_scores`**: Individual dimension scores for transparency (JS distance from population baseline).
+- **`demographic_confidence`**: The confidence multiplier (0–1).
+- **`per_dimension_scores`**: Individual dimension diversity scores (JS distance from population baseline).
 - **`polarization_scores`**: Per-dimension polarization values (approval-rate variance across groups). High values indicate the idea is divisive along that demographic axis.
-- **`polarization_penalty`**: The weighted polarization value used to compute the multiplicative penalty factor.
+- **`polarization_penalty`**: The weighted polarization value used to compute the penalty factor.
 - **`confidence_level`**: "low" / "medium" / "high" based on data availability.
 
 ### Design Decisions
 
-1. **Approval-weighted scoring**: The squared approval ratio keeps the score multiplicative — an idea must be both broadly liked (high approval) and broadly diverse (wide demographic support) to score well. Ideas with ~85% approval see a ~28% penalty; ideas with 95%+ approval are barely affected.
+1. **Simple multiplicative formula**: `Approval × Diversity × Confidence` is easy to explain to non-technical audiences. Each factor is intuitive: "Do people like it?", "Do all kinds of people like it?", "Do we have enough data to be sure?"
 
 2. **Population-relative diversity**: Uses JS distance from the actual voter population rather than theoretical equal distribution. This accounts for structural imbalances (e.g., if 85% of voters are White, a "perfectly bridging" idea doesn't need equal race representation).
 
@@ -605,7 +542,7 @@ The following are reported separately (not folded into the main score):
 
 4. **Sparse data handling**: Only reactions with known demographics are used. Demographics come primarily from Typeform respondents who also have GoVocal accounts — many GoVocal-only users lack demographic data.
 
-5. **Multiplicative gating**: Engagement confidence, demographic confidence, approval factor, engagement factor, and polarization penalty are all multiplied (not added), so an idea must pass all gates to achieve a high score.
+5. **All factors are multiplicative**: An idea must pass all three gates (approval, diversity, confidence) to achieve a high score. A zero on any factor kills the score.
 
 ---
 

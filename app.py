@@ -169,6 +169,18 @@ def analytics_idea_selections():
     return jsonify(analytics.compute_idea_selection_breakdown())
 
 
+@app.route("/api/analytics/idea-tags")
+def analytics_idea_tags():
+    """Idea count by input topic (tag)."""
+    return jsonify(analytics.compute_idea_tags_breakdown())
+
+
+@app.route("/api/analytics/votes-by-tag")
+def analytics_votes_by_tag():
+    """Upvotes and downvotes aggregated by input topic (tag)."""
+    return jsonify(analytics.compute_votes_by_tag())
+
+
 @app.route("/api/analytics/participation-breakdown")
 def analytics_participation_breakdown():
     """Per-source participation & action counts."""
@@ -196,13 +208,13 @@ def ideas_detail(idea_id: str):
 
 @app.route("/api/ideas/bridging")
 def ideas_by_bridging():
-    """Ideas sorted by bridging score (descending). Includes only ideas with a score."""
+    """Ideas sorted by consensus score (descending). Includes only ideas with a score."""
     all_ideas = idea_analytics.build_idea_view()
     if not all_ideas or not isinstance(all_ideas, list):
         return jsonify([])
-    # Filter to ideas that have a bridging score, sort descending
-    scored = [i for i in all_ideas if i.get("bridging", {}).get("bridging_score") is not None]
-    scored.sort(key=lambda x: x["bridging"]["bridging_score"], reverse=True)
+    # Filter to ideas that have a consensus score, sort descending
+    scored = [i for i in all_ideas if i.get("bridging", {}).get("consensus_score") is not None]
+    scored.sort(key=lambda x: x["bridging"]["consensus_score"], reverse=True)
     return jsonify(scored)
 
 
@@ -216,6 +228,24 @@ def analytics_participation_timeline():
 def analytics_participation_timeline_by_source():
     """Daily new unique participants, broken down by tier."""
     return jsonify(analytics.compute_participants_timeline())
+
+
+@app.route("/api/analytics/visits")
+def analytics_visits():
+    """Daily visit counts from GoVocal Insights API."""
+    return jsonify(analytics.compute_visits_timeline())
+
+
+@app.route("/api/analytics/participation-rate")
+def analytics_participation_rate():
+    """GoVocal Participation Rate over 24h, 36h, and 7 days."""
+    return jsonify(analytics.compute_participation_rate())
+
+
+@app.route("/api/analytics/demographics-baseline")
+def analytics_demographics_baseline():
+    """Demographic distribution of all voters — used as JSD baseline."""
+    return jsonify(idea_analytics.get_population_demographics())
 
 
 # ── Entry point ──────────────────────────────────────────────────────────
