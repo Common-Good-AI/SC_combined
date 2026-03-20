@@ -29,6 +29,10 @@ class Config:
     # --- App ---
     DEBUG: bool = os.getenv("FLASK_DEBUG", "0") == "1"
 
+    # --- Auth ---
+    ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "")
+    ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "")
+
     # --- Analytics (Phase 2a) ---
     # GoVocal project IDs that count as "survey" projects
     GV_SURVEY_PROJECT_IDS: list[str] = [
@@ -56,4 +60,8 @@ class Config:
             problems.append("TF_TOKEN is not set")
         if not cls.TF_FORM_IDS:
             problems.append("TF_FORM_IDS is not set (comma-separated list)")
+        if not cls.ADMIN_USERNAME:
+            problems.append("ADMIN_USERNAME is not set")
+        if not cls.ADMIN_PASSWORD:
+            problems.append("ADMIN_PASSWORD is not set")
         return problems

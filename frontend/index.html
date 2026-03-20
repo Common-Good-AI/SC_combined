@@ -17,13 +17,7 @@
     <!-- Loading screen -->
     <div v-if="appLoading" class="loading-screen">
       <div class="loading-card">
-        <svg class="loading-logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2"/>
-          <path d="M10 16.5C10 14 12 12 16 12C20 12 22 14 22 16.5C22 19 20 21 16 21C12 21 10 19 10 16.5Z" stroke="currentColor" stroke-width="2"/>
-          <circle cx="16" cy="10" r="2" fill="currentColor"/>
-          <circle cx="10" cy="20" r="2" fill="currentColor"/>
-          <circle cx="22" cy="20" r="2" fill="currentColor"/>
-        </svg>
+        <img class="loading-logo" src="/static/logo.svg" alt="GoVocal logo" />
         <h2 class="loading-title">SC Forum Dashboard</h2>
         <div v-if="loadError" class="loading-error">
           <p>{{ loadError }}</p>
@@ -45,13 +39,7 @@
     <header class="header">
       <div class="header-inner">
         <div class="brand">
-          <svg class="brand-icon" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2"/>
-            <path d="M10 16.5C10 14 12 12 16 12C20 12 22 14 22 16.5C22 19 20 21 16 21C12 21 10 19 10 16.5Z" stroke="currentColor" stroke-width="2"/>
-            <circle cx="16" cy="10" r="2" fill="currentColor"/>
-            <circle cx="10" cy="20" r="2" fill="currentColor"/>
-            <circle cx="22" cy="20" r="2" fill="currentColor"/>
-          </svg>
+          <img class="brand-icon" src="/static/logo.svg" alt="GoVocal logo" />
           <div class="brand-text">
             <span class="brand-name">SC Forum</span>
             <span class="brand-tagline">Community Engagement Dashboard</span>
@@ -62,6 +50,15 @@
 
     <nav class="nav-bar">
       <div class="nav-inner">
+        <button
+          :class="['nav-link', { active: activeTab === 'summary' }]"
+          @click="activeTab = 'summary'"
+        >
+          <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/>
+          </svg>
+          Summary
+        </button>
         <button
           :class="['nav-link', { active: activeTab === 'participation' }]"
           @click="activeTab = 'participation'"
@@ -84,6 +81,7 @@
     </nav>
 
     <main class="content">
+      <summary-tab v-if="activeTab === 'summary'" :preloaded="preloaded"></summary-tab>
       <participation-tab v-if="activeTab === 'participation'" :preloaded="preloaded"></participation-tab>
       <ideas-tab v-if="activeTab === 'ideas'" :preloaded="preloaded"></ideas-tab>
     </main>
@@ -98,6 +96,7 @@
 
   <!-- Components (order matters: leaf components first) -->
   <script src="/static/js/components/IdeaDetail.js"></script>
+  <script src="/static/js/components/SummaryTab.js"></script>
   <script src="/static/js/components/ParticipationTab.js"></script>
   <script src="/static/js/components/IdeasTab.js"></script>
   <script src="/static/js/app.js"></script>

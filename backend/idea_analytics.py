@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import re
 from pathlib import Path
 from typing import Any
@@ -65,12 +64,12 @@ _EXTRA_RACE_LABELS: dict[str, str] = {
 }
 
 AGE_BUCKETS = [
-    (18, 24, "18-24"),
-    (25, 34, "25-34"),
-    (35, 44, "35-44"),
-    (45, 54, "45-54"),
-    (55, 64, "55-64"),
-    (65, 200, "65+"),
+    (18, 29, "18-29"),
+    (30, 39, "30-39"),
+    (40, 49, "40-49"),
+    (50, 59, "50-59"),
+    (60, 69, "60-69"),
+    (70, 200, "70+"),
 ]
 
 # Zipcode → region / urban_rural lookup
@@ -80,10 +79,10 @@ _ZIPCODE_GEO: dict[str, dict[str, str]] = {}
 _ZIPCODE_GEO_LOADED = False
 
 # ---------------------------------------------------------------------------
-# Bridging Score Constants
+# Consensus Score Constants
 # ---------------------------------------------------------------------------
 
-# Demographic dimensions and their base weights for bridging score
+# Demographic dimensions and their base weights for consensus score
 # Political lean is most important (0.4), others split evenly
 BRIDGING_DIMENSIONS: list[str] = ["political_lean", "age_bucket", "race", "region", "urban_rural"]
 BRIDGING_BASE_WEIGHTS: dict[str, float] = {
@@ -94,23 +93,16 @@ BRIDGING_BASE_WEIGHTS: dict[str, float] = {
     "urban_rural": 0.20,
 }
 
-# Thresholds for bridging score confidence
-BRIDGING_MIN_KNOWN_DEMO_REACTIONS = 15   # Below this, bridging score = None (insufficient data)
-BRIDGING_FULL_CONFIDENCE_REACTIONS = 30  # At this level, demographic_confidence = 1.0
-BRIDGING_ENGAGEMENT_SCALE = 50  # k in engagement_confidence = 1 - exp(-total/k)
+# Thresholds for consensus score confidence
+BRIDGING_MIN_KNOWN_DEMO_REACTIONS = 20   # Below this, consensus score = None (insufficient data)
+BRIDGING_FULL_CONFIDENCE_REACTIONS = 50  # At this level, demographic_confidence = 1.0
 
-# Approval ratio settings
-BRIDGING_APPROVAL_EXPONENT = 1.5  # exponent for (upvotes/total)^n — higher = harsher penalty for low approval
-BRIDGING_APPROVAL_WEIGHT = 0.7   # weight (0-1) of approval_factor in final score; 1.0 = full influence, 0.0 = ignored
+# Polarization penalty settings (per-group approval rate variance)
+BRIDGING_POLARIZATION_PENALTY_WEIGHT = 1.0  # How strongly polarization penalizes the score (0=ignore, 1=full penalty)
+BRIDGING_POLARIZATION_MIN_GROUP_VOTES = 20   # Minimum votes in a group to include it in variance calculation
 
-# Engagement volume settings (dynamically computed as max reactions across all ideas)
-BRIDGING_ENGAGEMENT_REFERENCE_FALLBACK = 150  # fallback if reactions data is unavailable
-BRIDGING_ENGAGEMENT_WEIGHT = 0.2  # weight (0-1) of engagement_factor in final score; 1.0 = full influence, 0.0 = ignored
-
-# Cross-coalition (JSD) settings
-BRIDGING_MIN_DOWNVOTES_FOR_JSD = 5  # Need this many downvotes with known demos to compute JSD
-BRIDGING_UPVOTE_DIVERSITY_WEIGHT = 0.7  # w1 in composite when JSD is available
-BRIDGING_CROSS_COALITION_WEIGHT = 0.3   # w2 in composite when JSD is available
+# WMGA (Weighted Mean Group Approval) settings
+BRIDGING_WMGA_PRIOR_STRENGTH = 15  # Bayesian prior strength; higher = more shrinkage toward overall approval
 
 
 def _load_zipcode_geo() -> None:
@@ -393,25 +385,23 @@ def _ensure_user_demo_cache() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Population baseline for bridging score normalization
+# Population baseline for consensus score normalization
 # ---------------------------------------------------------------------------
 
 _population_baseline: dict[str, dict[str, float]] = {}
 _population_baseline_built = False
-_max_idea_reactions: int = BRIDGING_ENGAGEMENT_REFERENCE_FALLBACK
+
+_platform_approval_rate: float = 0.5
+_platform_approval_rate_built = False
 
 
 def _build_population_baseline() -> None:
     """Build the global demographic distribution across all voters with known demographics.
 
-    This is the baseline for KL/JSD-based diversity scoring. A bridging score of 1.0
+    This is the baseline for JSD-based diversity scoring. A diversity score of 1.0
     means the idea's upvote distribution matches the overall voter population.
-
-    Also computes `_max_idea_reactions` — the highest total reaction count across
-    all ideas — used as the engagement factor reference so that the score is
-    relative to the most-engaged-with idea.
     """
-    global _population_baseline, _population_baseline_built, _max_idea_reactions
+    global _population_baseline, _population_baseline_built
     if _population_baseline_built:
         return
     _population_baseline_built = True
@@ -422,14 +412,6 @@ def _build_population_baseline() -> None:
     if reactions_df.empty:
         log.warning("No reactions data — population baseline will be empty")
         return
-
-    # Compute max reactions per idea for engagement factor reference
-    if "reactable_id" in reactions_df.columns:
-        per_idea_counts = reactions_df["reactable_id"].value_counts()
-        _max_idea_reactions = int(per_idea_counts.max()) if len(per_idea_counts) > 0 else BRIDGING_ENGAGEMENT_REFERENCE_FALLBACK
-    else:
-        _max_idea_reactions = BRIDGING_ENGAGEMENT_REFERENCE_FALLBACK
-    log.info("Max idea reactions (engagement reference): %d", _max_idea_reactions)
 
     # Get unique voter user_ids (users who have reacted to at least one idea)
     voter_ids = set()
@@ -463,10 +445,103 @@ def _build_population_baseline() -> None:
     )
 
 
+def _build_platform_approval_rate() -> None:
+    """Compute the platform-wide approval rate across all reactions.
+
+    Used as the Bayesian prior for WMGA so that groups with no votes on
+    an idea are shrunk toward the global average rather than toward the
+    idea's own (potentially perfect) approval rate.
+    """
+    global _platform_approval_rate, _platform_approval_rate_built
+    if _platform_approval_rate_built:
+        return
+    _platform_approval_rate_built = True
+
+    reactions_df = store.get("gv_reactions", pd.DataFrame())
+    if reactions_df.empty or "mode" not in reactions_df.columns:
+        return
+
+    total = len(reactions_df)
+    if total == 0:
+        return
+
+    upvotes = int((reactions_df["mode"] == "up").sum())
+    _platform_approval_rate = upvotes / total
+    log.info("Platform-wide approval rate: %.4f", _platform_approval_rate)
+
+
+def get_population_demographics() -> dict[str, Any]:
+    """Return the demographic distribution of all voters on the platform.
+
+    This is the same baseline used for JSD normalization in the consensus score.
+    Returns a dict of dimension -> {category: proportion, ...}.
+    """
+    _build_population_baseline()
+    _ensure_user_demo_cache()
+
+    reactions_df = store.get("gv_reactions", pd.DataFrame())
+    voter_ids: set[str] = set()
+    if not reactions_df.empty and "user_id" in reactions_df.columns:
+        voter_ids = set(reactions_df["user_id"].dropna().unique())
+
+    total_voters = len(voter_ids)
+
+    dim_counts: dict[str, dict[str, int]] = {dim: {} for dim in BRIDGING_DIMENSIONS}
+    dim_known: dict[str, int] = {dim: 0 for dim in BRIDGING_DIMENSIONS}
+
+    for uid in voter_ids:
+        demo = _user_demo_cache.get(uid, {})
+        for dim in BRIDGING_DIMENSIONS:
+            val = demo.get(dim)
+            if val is not None:
+                dim_counts[dim][val] = dim_counts[dim].get(val, 0) + 1
+                dim_known[dim] += 1
+
+    # Canonical display orderings per dimension (matches IdeaDetail.js)
+    _DIM_ORDER: dict[str, list[str]] = {
+        "political_lean": [
+            "Very Conservative", "Conservative", "Moderate",
+            "Liberal", "Very Liberal", "Not sure", "Prefer not to say",
+        ],
+        "age_bucket": [
+            "Under 18", "18-29", "30-39", "40-49", "50-59", "60-69", "65+", "70+",
+        ],
+    }
+
+    def _sort_cats(dim: str, items: list[tuple[str, int]]) -> list[tuple[str, int]]:
+        order = _DIM_ORDER.get(dim)
+        if order:
+            rank = {v: i for i, v in enumerate(order)}
+            return sorted(items, key=lambda x: (rank.get(x[0], 999), x[0]))
+        if dim == "race":
+            # "Prefer not to say" last, rest alphabetical
+            return sorted(items, key=lambda x: (x[0].lower().startswith("prefer"), x[0]))
+        # region, urban_rural: alphabetical
+        return sorted(items, key=lambda x: x[0])
+
+    dimensions: dict[str, Any] = {}
+    for dim in BRIDGING_DIMENSIONS:
+        counts = dim_counts[dim]
+        known = dim_known[dim]
+        sorted_cats = _sort_cats(dim, list(counts.items()))
+        dimensions[dim] = {
+            "total_known": known,
+            "total_unknown": total_voters - known,
+            "distribution": {k: round(v / known, 4) if known else 0 for k, v in sorted_cats},
+            "counts": dict(sorted_cats),
+        }
+
+    return {
+        "total_voters": total_voters,
+        "dimensions": dimensions,
+    }
+
+
 def invalidate_cache() -> None:
     """Clear cached lookups (call after data refresh)."""
     global _user_demo_cache, _email_demo_cache, _userid_email_map, _ZIPCODE_GEO, _ZIPCODE_GEO_LOADED
-    global _population_baseline, _population_baseline_built, _max_idea_reactions
+    global _population_baseline, _population_baseline_built
+    global _platform_approval_rate, _platform_approval_rate_built
     _user_demo_cache = {}
     _email_demo_cache = {}
     _userid_email_map = {}
@@ -474,7 +549,8 @@ def invalidate_cache() -> None:
     _ZIPCODE_GEO_LOADED = False
     _population_baseline = {}
     _population_baseline_built = False
-    _max_idea_reactions = BRIDGING_ENGAGEMENT_REFERENCE_FALLBACK
+    _platform_approval_rate = 0.5
+    _platform_approval_rate_built = False
 
 
 # ---------------------------------------------------------------------------
@@ -513,7 +589,7 @@ def _reaction_demo_breakdown(reactions_df: pd.DataFrame) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Bridging Score Computation
+# Consensus Score Computation
 # ---------------------------------------------------------------------------
 
 def _counts_to_distribution(counts: dict[str, int]) -> dict[str, float]:
@@ -551,9 +627,10 @@ def _jsd_between_distributions(
     q = q / q.sum()
 
     # scipy's jensenshannon returns the JS distance (sqrt of divergence)
-    # We square it to get divergence, which is bounded [0, 1]
+    # Use the distance directly (not squared) for better sensitivity to
+    # distribution shifts among minority subgroups.
     js_distance = jensenshannon(p, q)
-    return float(js_distance ** 2)
+    return float(js_distance)
 
 
 def _compute_dimension_coverage(
@@ -587,36 +664,78 @@ def _compute_effective_weights(coverage: dict[str, float]) -> dict[str, float]:
     return {dim: w / total for dim, w in effective.items()}
 
 
-def _compute_bridging_score(
+def _compute_group_approval_variance(
+    up_demos: dict[str, list[str | None]],
+    down_demos: dict[str, list[str | None]],
+    dim: str,
+) -> float:
+    """Compute variance of per-group approval rates for a dimension.
+
+    Returns a normalised value in [0, 1] where 0 means all groups approve
+    at the same rate and 1 means maximum polarization (some groups 100%
+    approve while others 0% approve).
+    """
+    up_counts = _bucket_counter([v for v in up_demos[dim] if v is not None])
+    down_counts = _bucket_counter([v for v in down_demos[dim] if v is not None])
+
+    all_groups = set(up_counts.keys()) | set(down_counts.keys())
+    if len(all_groups) < 2:
+        return 0.0
+
+    approval_rates: list[float] = []
+    for group in all_groups:
+        u = up_counts.get(group, 0)
+        d = down_counts.get(group, 0)
+        total = u + d
+        if total >= BRIDGING_POLARIZATION_MIN_GROUP_VOTES:
+            approval_rates.append(u / total)
+
+    if len(approval_rates) < 2:
+        return 0.0
+
+    # Variance of approval rates: 0 = unanimous, 0.25 = maximum split
+    mean = sum(approval_rates) / len(approval_rates)
+    variance = sum((r - mean) ** 2 for r in approval_rates) / len(approval_rates)
+    # Normalise: max possible variance is 0.25 (half at 0%, half at 100%)
+    return min(1.0, variance / 0.25)
+
+
+def _compute_consensus_score(
     idea_reactions: pd.DataFrame,
     total_votes: int,
 ) -> dict[str, Any]:
-    """Compute the bridging score for an idea.
+    """Compute the consensus score for an idea.
+
+    Simplified formula:  Score = Approval × Diversity × Confidence × 100
+
+    Where:
+    - Approval  = upvotes / total_votes
+    - Diversity = weighted demographic diversity (JSD vs population)
+                  × (1 − polarization_penalty_weight × polarization)
+    - Confidence = min(1, known_demo_reactions / 30)
 
     Returns a dict with:
-    - bridging_score: float 0-100 or None if insufficient data
+    - consensus_score: float 0-100 or None if insufficient data
     - confidence_level: "low" | "medium" | "high" | None
     - demographic_coverage: float (fraction of reactions with known demos)
-    - engagement_confidence: float 0-1
     - demographic_confidence: float 0-1
+    - approval_ratio: float 0-1
     - per_dimension_scores: dict of dimension → score (0-1)
-    - downvote_diversity: float 0-1 (separate metric)
-    - cross_coalition_used: bool
+    - polarization_scores: dict of dimension → score (0-1)
+    - polarization_penalty: float 0-1
     """
     _ensure_user_demo_cache()
     _build_population_baseline()
 
     result: dict[str, Any] = {
-        "bridging_score": None,
+        "consensus_score": None,
         "confidence_level": None,
         "demographic_coverage": 0.0,
-        "engagement_confidence": 0.0,
         "demographic_confidence": 0.0,
-        "approval_factor": 0.0,
-        "engagement_factor": 0.0,
+        "approval_ratio": 0.0,
         "per_dimension_scores": {},
-        "downvote_diversity": None,
-        "cross_coalition_used": False,
+        "polarization_scores": {},
+        "polarization_penalty": 0.0,
     }
 
     if idea_reactions.empty or total_votes == 0:
@@ -639,10 +758,9 @@ def _compute_bridging_score(
     up_demos = collect_demos(up)
     down_demos = collect_demos(down)
 
-    # Approval factor: (upvotes / total) ^ exponent
+    # Approval: simple ratio of upvotes to total
     approval_ratio = len(up) / total_votes if total_votes > 0 else 0.0
-    approval_factor = approval_ratio ** BRIDGING_APPROVAL_EXPONENT
-    result["approval_factor"] = round(approval_factor, 4)
+    result["approval_ratio"] = round(approval_ratio, 4)
 
     # Count reactions with at least one known demographic value
     def count_known_demo_reactions(df: pd.DataFrame) -> int:
@@ -664,23 +782,15 @@ def _compute_bridging_score(
     if total_known < BRIDGING_MIN_KNOWN_DEMO_REACTIONS:
         return result
 
-    # Engagement confidence: 1 - exp(-total_votes / k)
-    engagement_conf = 1.0 - math.exp(-total_votes / BRIDGING_ENGAGEMENT_SCALE)
-    result["engagement_confidence"] = round(engagement_conf, 4)
-
-    # Engagement factor: log curve relative to the most-reacted idea
-    engagement_factor = min(1.0, math.log1p(total_votes) / math.log1p(_max_idea_reactions))
-    result["engagement_factor"] = round(engagement_factor, 4)
-
-    # Demographic confidence: min(1, known / threshold)
-    demo_conf = min(1.0, total_known / BRIDGING_FULL_CONFIDENCE_REACTIONS)
-    result["demographic_confidence"] = round(demo_conf, 4)
+    # Confidence: linear ramp from 0 to 1 as known demos reach threshold
+    confidence = min(1.0, total_known / BRIDGING_FULL_CONFIDENCE_REACTIONS)
+    result["demographic_confidence"] = round(confidence, 4)
 
     # Compute coverage per dimension and effective weights
     coverage = _compute_dimension_coverage(up_demos, down_demos)
     effective_weights = _compute_effective_weights(coverage)
 
-    # Compute per-dimension diversity scores using JSD from population baseline
+    # Per-dimension diversity scores: 1 − JSD(upvote_dist, population_baseline)
     per_dim_scores: dict[str, float] = {}
     for dim in BRIDGING_DIMENSIONS:
         up_counts = _bucket_counter([v for v in up_demos[dim] if v is not None])
@@ -691,77 +801,33 @@ def _compute_bridging_score(
             per_dim_scores[dim] = 0.0
         else:
             jsd = _jsd_between_distributions(up_dist, pop_dist)
-            per_dim_scores[dim] = 1.0 - jsd  # Score = 1 when identical to population
+            per_dim_scores[dim] = 1.0 - jsd
 
     result["per_dimension_scores"] = {dim: round(s, 4) for dim, s in per_dim_scores.items()}
 
-    # Compute upvote diversity as weighted average
-    upvote_diversity = sum(
+    # Per-dimension polarization (approval-rate variance across groups)
+    polarization_scores: dict[str, float] = {}
+    for dim in BRIDGING_DIMENSIONS:
+        polarization_scores[dim] = _compute_group_approval_variance(up_demos, down_demos, dim)
+    result["polarization_scores"] = {dim: round(s, 4) for dim, s in polarization_scores.items()}
+
+    # Weighted polarization penalty
+    weighted_polarization = sum(
+        effective_weights[dim] * polarization_scores[dim]
+        for dim in BRIDGING_DIMENSIONS
+    )
+    polarization_factor = 1.0 - BRIDGING_POLARIZATION_PENALTY_WEIGHT * weighted_polarization
+    result["polarization_penalty"] = round(weighted_polarization, 4)
+
+    # Diversity: weighted average of per-dimension scores × polarization penalty
+    diversity = sum(
         effective_weights[dim] * per_dim_scores[dim]
         for dim in BRIDGING_DIMENSIONS
-    )
+    ) * polarization_factor
 
-    # Compute downvote diversity (separate metric, not in main score)
-    down_dim_scores: dict[str, float] = {}
-    for dim in BRIDGING_DIMENSIONS:
-        down_counts = _bucket_counter([v for v in down_demos[dim] if v is not None])
-        down_dist = _counts_to_distribution(down_counts)
-        pop_dist = _population_baseline.get(dim, {})
-
-        if not down_dist or not pop_dist:
-            down_dim_scores[dim] = 0.0
-        else:
-            jsd = _jsd_between_distributions(down_dist, pop_dist)
-            down_dim_scores[dim] = 1.0 - jsd
-
-    downvote_diversity = sum(
-        effective_weights[dim] * down_dim_scores[dim]
-        for dim in BRIDGING_DIMENSIONS
-    )
-    result["downvote_diversity"] = round(downvote_diversity, 4)
-
-    # Cross-coalition signal (JSD between upvote and downvote distributions)
-    # Only compute if we have enough downvotes with known demographics
-    cross_coalition_score = 0.0
-    use_jsd = down_known >= BRIDGING_MIN_DOWNVOTES_FOR_JSD
-
-    if use_jsd:
-        result["cross_coalition_used"] = True
-        cross_coalition_dims: dict[str, float] = {}
-        for dim in BRIDGING_DIMENSIONS:
-            up_counts = _bucket_counter([v for v in up_demos[dim] if v is not None])
-            down_counts = _bucket_counter([v for v in down_demos[dim] if v is not None])
-            up_dist = _counts_to_distribution(up_counts)
-            down_dist = _counts_to_distribution(down_counts)
-
-            if not up_dist or not down_dist:
-                cross_coalition_dims[dim] = 0.0
-            else:
-                jsd = _jsd_between_distributions(up_dist, down_dist)
-                # 1 - JSD: score = 1 when upvoters and downvoters look identical
-                cross_coalition_dims[dim] = 1.0 - jsd
-
-        cross_coalition_score = sum(
-            effective_weights[dim] * cross_coalition_dims[dim]
-            for dim in BRIDGING_DIMENSIONS
-        )
-
-        # Combine upvote diversity and cross-coalition
-        diversity_composite = (
-            BRIDGING_UPVOTE_DIVERSITY_WEIGHT * upvote_diversity +
-            BRIDGING_CROSS_COALITION_WEIGHT * cross_coalition_score
-        )
-    else:
-        # Fall back to upvote diversity only
-        diversity_composite = upvote_diversity
-
-    # Final bridging score
-    # Approval and engagement factors are raised to their respective weights
-    # so that weight=1.0 means full influence and weight=0.0 means no influence.
-    weighted_approval = approval_factor ** BRIDGING_APPROVAL_WEIGHT
-    weighted_engagement = engagement_factor ** BRIDGING_ENGAGEMENT_WEIGHT
-    bridging_score = engagement_conf * demo_conf * weighted_approval * weighted_engagement * diversity_composite * 100
-    result["bridging_score"] = round(bridging_score, 2)
+    # Final score: Approval × Diversity × Confidence × 100
+    consensus_score = approval_ratio * diversity * confidence * 100
+    result["consensus_score"] = round(consensus_score, 2)
 
     # Confidence level
     if total_known >= BRIDGING_FULL_CONFIDENCE_REACTIONS and total_votes >= 20:
@@ -770,6 +836,124 @@ def _compute_bridging_score(
         result["confidence_level"] = "medium"
     else:
         result["confidence_level"] = "low"
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# WMGA (Weighted Mean Group Approval) consensus score
+# ---------------------------------------------------------------------------
+
+def _compute_consensus_score_wmga(
+    idea_reactions: pd.DataFrame,
+    total_votes: int,
+) -> dict[str, Any]:
+    """Compute consensus score using Weighted Mean Group Approval (WMGA).
+
+    For each demographic group, computes a Bayesian-smoothed approval rate:
+        smoothed = (group_up + prior_strength × overall_approval)
+                 / (group_votes + prior_strength)
+
+    The per-dimension score is the population-weighted mean of smoothed group
+    approvals.  Final score = weighted-avg of dimensions × confidence × 100.
+
+    Groups with zero votes shrink entirely to overall_approval, so they
+    neither help nor hurt.  The prior_strength controls how aggressively
+    small samples are pulled toward the global mean.
+    """
+    _ensure_user_demo_cache()
+    _build_population_baseline()
+    _build_platform_approval_rate()
+
+    result: dict[str, Any] = {
+        "wmga_score": None,
+        "wmga_per_dimension": {},
+    }
+
+    if idea_reactions.empty or total_votes == 0:
+        return result
+
+    up = idea_reactions[idea_reactions["mode"] == "up"] if "mode" in idea_reactions.columns else pd.DataFrame()
+    down = idea_reactions[idea_reactions["mode"] == "down"] if "mode" in idea_reactions.columns else pd.DataFrame()
+
+    def collect_demos(df: pd.DataFrame) -> dict[str, list[str | None]]:
+        demos: dict[str, list[str | None]] = {dim: [] for dim in BRIDGING_DIMENSIONS}
+        for _, r in df.iterrows():
+            uid = _clean_val(r.get("user_id"))
+            d = _user_demo_cache.get(uid, {}) if uid else {}
+            for dim in BRIDGING_DIMENSIONS:
+                demos[dim].append(d.get(dim))
+        return demos
+
+    up_demos = collect_demos(up)
+    down_demos = collect_demos(down)
+
+    # Count reactions with at least one known demographic value
+    def count_known(df: pd.DataFrame) -> int:
+        count = 0
+        for _, r in df.iterrows():
+            uid = _clean_val(r.get("user_id"))
+            d = _user_demo_cache.get(uid, {}) if uid else {}
+            if any(d.get(dim) is not None for dim in BRIDGING_DIMENSIONS):
+                count += 1
+        return count
+
+    total_known = count_known(up) + count_known(down)
+    if total_known < BRIDGING_MIN_KNOWN_DEMO_REACTIONS:
+        return result
+
+    confidence = min(1.0, total_known / BRIDGING_FULL_CONFIDENCE_REACTIONS)
+
+    coverage = _compute_dimension_coverage(up_demos, down_demos)
+    effective_weights = _compute_effective_weights(coverage)
+
+    per_dim: dict[str, float] = {}
+    for dim in BRIDGING_DIMENSIONS:
+        pop_dist = _population_baseline.get(dim, {})
+        if not pop_dist:
+            per_dim[dim] = 0.0
+            continue
+
+        up_counts = _bucket_counter([v for v in up_demos[dim] if v is not None])
+        down_counts = _bucket_counter([v for v in down_demos[dim] if v is not None])
+
+        dim_score = 0.0
+        for group, pop_weight in pop_dist.items():
+            group_up = up_counts.get(group, 0)
+            group_total = group_up + down_counts.get(group, 0)
+            smoothed = (
+                (group_up + BRIDGING_WMGA_PRIOR_STRENGTH * _platform_approval_rate)
+                / (group_total + BRIDGING_WMGA_PRIOR_STRENGTH)
+            )
+            dim_score += pop_weight * smoothed
+
+        per_dim[dim] = dim_score
+
+    # Per-dimension polarization penalty (same as JSD algorithm)
+    polarization_scores: dict[str, float] = {}
+    for dim in BRIDGING_DIMENSIONS:
+        polarization_scores[dim] = _compute_group_approval_variance(up_demos, down_demos, dim)
+
+    weighted_polarization = sum(
+        effective_weights[dim] * polarization_scores[dim]
+        for dim in BRIDGING_DIMENSIONS
+    )
+    polarization_factor = 1.0 - BRIDGING_POLARIZATION_PENALTY_WEIGHT * weighted_polarization
+
+    # Apply polarization penalty per dimension for the breakdown display
+    per_dim_penalized: dict[str, float] = {}
+    for dim in BRIDGING_DIMENSIONS:
+        penalty = 1.0 - BRIDGING_POLARIZATION_PENALTY_WEIGHT * polarization_scores[dim]
+        per_dim_penalized[dim] = per_dim[dim] * penalty
+
+    result["wmga_per_dimension"] = {dim: round(s, 4) for dim, s in per_dim_penalized.items()}
+    result["wmga_polarization_scores"] = {dim: round(s, 4) for dim, s in polarization_scores.items()}
+    result["wmga_polarization_penalty"] = round(weighted_polarization, 4)
+
+    wmga_score = sum(
+        effective_weights[dim] * per_dim[dim] for dim in BRIDGING_DIMENSIONS
+    ) * polarization_factor * confidence * 100
+    result["wmga_score"] = round(wmga_score, 2)
 
     return result
 
@@ -848,8 +1032,10 @@ def _build_single_idea(idea_row: pd.Series, reactions_df: pd.DataFrame) -> dict[
     if isinstance(title, dict):
         title = title.get("en", title.get("", str(title)))
 
-    # Bridging score
-    bridging = _compute_bridging_score(idea_reactions, total)
+    # Consensus score (both algorithms)
+    bridging = _compute_consensus_score(idea_reactions, total)
+    wmga = _compute_consensus_score_wmga(idea_reactions, total)
+    bridging.update(wmga)
 
     return {
         "idea_id": idea_id,

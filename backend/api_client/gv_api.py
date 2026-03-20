@@ -209,3 +209,58 @@ class GoVocalClient:
         if updated_after:
             params["updated_after"] = updated_after
         return self._request("/api/v2/reactions", params=params)
+
+    def get_input_topics(self) -> list[dict]:
+        """Fetch all project-level input topics (idea tags)."""
+        return self._request("/api/v2/input_topics/")
+
+    def get_ideas_input_topics(self) -> list[dict]:
+        """Fetch the many-to-many join table between ideas and input topics."""
+        return self._request("/api/v2/ideas_input_topics")
+
+    # ── Simple GET (no pagination) ───────────────────────────────────────
+
+    def _get_json(
+        self,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Simple authenticated GET that returns the raw JSON body."""
+        self._ensure_auth()
+        url = f"{self.base_url}{endpoint}"
+        headers = {"Authorization": f"Bearer {self._jwt}"}
+        resp = requests.get(url, headers=headers, params=params or {}, timeout=60)
+        if resp.status_code == 401:
+            self.authenticate()
+            headers = {"Authorization": f"Bearer {self._jwt}"}
+            resp = requests.get(url, headers=headers, params=params or {}, timeout=60)
+        resp.raise_for_status()
+        return resp.json()
+
+    # ── Insights: Visits ─────────────────────────────────────────────────
+
+    def get_visits(
+        self,
+        start_at: str | None = None,
+        end_at: str | None = None,
+        resolution: str = "day",
+    ) -> list[dict[str, Any]]:
+        """Fetch visitor data from ``/api/v2/insights/visits``.
+
+        Parameters
+        ----------
+        start_at : ISO-8601 date, optional
+        end_at : ISO-8601 date, optional
+        resolution : 'day' | 'week' | 'month' (default 'day')
+
+        Returns the ``visits`` list from the API response.  Each entry
+        has ``date_group``, ``visits`` (page loads), and ``visitors``
+        (unique visitors).
+        """
+        params: dict[str, Any] = {"resolution": resolution}
+        if start_at:
+            params["start_at"] = start_at
+        if end_at:
+            params["end_at"] = end_at
+        body = self._get_json("/api/v2/insights/visits", params)
+        return body.get("visits", body.get("data", []))

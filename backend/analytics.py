@@ -18,10 +18,12 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pandas as pd
 
+from backend.api_client.gv_api import GoVocalClient
 from backend.config import Config
 from backend.data_store import store
 
@@ -350,7 +352,7 @@ _GV_THEME_LABELS: dict[str, str] = {
     "quality_education_qvy": "Fixing Our Schools",
     "wages_and_job_development_q0c": "Jobs, Wages, and Rising Costs",
     "option1": "Roads, Traffic, and Infrastructure",
-    "option2": "Something else",
+    "option2": "Affordable Housing and Community Growth",
 }
 
 _GV_INITIAL_SURVEY_PROJECT_ID = "b3808271-ec77-485f-b028-7b9a25cf37ed"
@@ -420,7 +422,157 @@ def compute_idea_selection_breakdown() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# 5. Participation breakdown (3-tier model)
+# 5. Idea tag breakdown
+# ---------------------------------------------------------------------------
+
+def compute_idea_tags_breakdown() -> dict[str, Any]:
+    """Count ideas per input topic (tag) using the ideas_input_topics join table.
+
+    Returns a list of {tag, topic_id, count} dicts sorted by count descending,
+    plus the total number of distinct tagged ideas and total distinct topics.
+    """
+    topics_df = store.get("gv_input_topics", pd.DataFrame())
+    join_df = store.get("gv_ideas_input_topics", pd.DataFrame())
+
+    if join_df.empty or "input_topic_id" not in join_df.columns:
+        return {"total_tagged_ideas": 0, "total_tags": 0, "tags": []}
+
+    idea_col = "idea_id" if "idea_id" in join_df.columns else None
+
+    if idea_col:
+        counts = (
+            join_df.groupby("input_topic_id")[idea_col]
+            .nunique()
+            .reset_index()
+            .rename(columns={idea_col: "count"})
+        )
+    else:
+        counts = (
+            join_df["input_topic_id"]
+            .value_counts()
+            .reset_index()
+            .rename(columns={"index": "input_topic_id", "input_topic_id": "count"})
+        )
+
+    name_map: dict = {}
+    if not topics_df.empty and "id" in topics_df.columns and "title" in topics_df.columns:
+        name_map = topics_df.set_index("id")["title"].to_dict()
+
+    tags = [
+        {
+            "tag": name_map.get(row["input_topic_id"], row["input_topic_id"]),
+            "topic_id": row["input_topic_id"],
+            "count": int(row["count"]),
+        }
+        for _, row in counts.sort_values("count", ascending=False).iterrows()
+    ]
+
+    total_tagged = int(join_df[idea_col].nunique()) if idea_col else int(len(join_df))
+
+    return {
+        "total_tagged_ideas": total_tagged,
+        "total_tags": len(tags),
+        "tags": tags,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 5b. Votes (upvotes / downvotes) aggregated by tag
+# ---------------------------------------------------------------------------
+
+def compute_votes_by_tag() -> dict[str, Any]:
+    """Aggregate upvotes and downvotes per input topic (tag).
+
+    Joins ``gv_ideas_input_topics`` with ``gv_reactions`` so that each
+    idea's votes count toward every tag assigned to it.
+
+    Returns ``{tags: [{tag, topic_id, upvotes, downvotes, net}]}``
+    sorted by *net* descending.
+    """
+    topics_df = store.get("gv_input_topics", pd.DataFrame())
+    join_df = store.get("gv_ideas_input_topics", pd.DataFrame())
+    reactions_df = store.get("gv_reactions", pd.DataFrame())
+
+    if join_df.empty or "input_topic_id" not in join_df.columns:
+        return {"tags": []}
+
+    idea_col = "idea_id" if "idea_id" in join_df.columns else None
+    if idea_col is None:
+        return {"tags": []}
+
+    # Build tag name lookup
+    name_map: dict = {}
+    if not topics_df.empty and "id" in topics_df.columns and "title" in topics_df.columns:
+        name_map = topics_df.set_index("id")["title"].to_dict()
+
+    # Map each idea to its tags
+    idea_tags = join_df[[idea_col, "input_topic_id"]].copy()
+
+    if reactions_df.empty or "reactable_id" not in reactions_df.columns:
+        # No reactions — return zeroed-out entries
+        tag_ids = idea_tags["input_topic_id"].unique()
+        tags = [
+            {
+                "tag": name_map.get(tid, tid),
+                "topic_id": tid,
+                "upvotes": 0,
+                "downvotes": 0,
+                "net": 0,
+            }
+            for tid in tag_ids
+        ]
+        return {"tags": tags}
+
+    # Join reactions to idea-tag associations
+    merged = idea_tags.merge(
+        reactions_df[["reactable_id", "mode"]],
+        left_on=idea_col,
+        right_on="reactable_id",
+        how="inner",
+    )
+
+    if merged.empty:
+        tag_ids = idea_tags["input_topic_id"].unique()
+        tags = [
+            {
+                "tag": name_map.get(tid, tid),
+                "topic_id": tid,
+                "upvotes": 0,
+                "downvotes": 0,
+                "net": 0,
+            }
+            for tid in tag_ids
+        ]
+        return {"tags": tags}
+
+    # Aggregate upvotes / downvotes per tag
+    merged["is_up"] = (merged["mode"] == "up").astype(int)
+    merged["is_down"] = (merged["mode"] == "down").astype(int)
+
+    agg = (
+        merged.groupby("input_topic_id")[["is_up", "is_down"]]
+        .sum()
+        .reset_index()
+        .rename(columns={"is_up": "upvotes", "is_down": "downvotes"})
+    )
+    agg["net"] = agg["upvotes"] - agg["downvotes"]
+
+    tags = [
+        {
+            "tag": name_map.get(row["input_topic_id"], row["input_topic_id"]),
+            "topic_id": row["input_topic_id"],
+            "upvotes": int(row["upvotes"]),
+            "downvotes": int(row["downvotes"]),
+            "net": int(row["net"]),
+        }
+        for _, row in agg.sort_values("net", ascending=False).iterrows()
+    ]
+
+    return {"tags": tags}
+
+
+# ---------------------------------------------------------------------------
+# 6. Participation breakdown (3-tier model)
 # ---------------------------------------------------------------------------
 
 def _source_participation_gv_ideas(label: str, df: pd.DataFrame) -> dict:
@@ -570,7 +722,7 @@ def compute_participation_timeline() -> dict[str, Any]:
     # --- Surveys: GV survey ideas + all Typeform submissions ---
     gv_survey = store.get("gv_ideas_survey", pd.DataFrame())
     if not gv_survey.empty and "created_at" in gv_survey.columns:
-        dates = pd.to_datetime(gv_survey["created_at"], errors="coerce").dt.date
+        dates = pd.to_datetime(gv_survey["created_at"], errors="coerce", utc=True).dt.date
         for d, cnt in dates.value_counts().items():
             records.append({"date": str(d), "category": "surveys", "count": int(cnt)})
 
@@ -578,21 +730,21 @@ def compute_participation_timeline() -> dict[str, Any]:
         ts_col = "submitted_at" if "submitted_at" in tf_df.columns else "created_at"
         if ts_col not in tf_df.columns or tf_df.empty:
             continue
-        dates = pd.to_datetime(tf_df[ts_col], errors="coerce").dt.date
+        dates = pd.to_datetime(tf_df[ts_col], errors="coerce", utc=True).dt.date
         for d, cnt in dates.value_counts().items():
             records.append({"date": str(d), "category": "surveys", "count": int(cnt)})
 
     # --- Ideas: GV ideation ---
     gv_ideation = store.get("gv_ideas_ideation", pd.DataFrame())
     if not gv_ideation.empty and "created_at" in gv_ideation.columns:
-        dates = pd.to_datetime(gv_ideation["created_at"], errors="coerce").dt.date
+        dates = pd.to_datetime(gv_ideation["created_at"], errors="coerce", utc=True).dt.date
         for d, cnt in dates.value_counts().items():
             records.append({"date": str(d), "category": "ideas", "count": int(cnt)})
 
     # --- Reactions ---
     gv_reactions = store.get("gv_reactions", pd.DataFrame())
     if not gv_reactions.empty and "created_at" in gv_reactions.columns:
-        dates = pd.to_datetime(gv_reactions["created_at"], errors="coerce").dt.date
+        dates = pd.to_datetime(gv_reactions["created_at"], errors="coerce", utc=True).dt.date
         for d, cnt in dates.value_counts().items():
             records.append({"date": str(d), "category": "reactions", "count": int(cnt)})
 
@@ -660,7 +812,7 @@ def compute_participants_timeline() -> dict[str, Any]:
         if ts_col in gv_users.columns:
             tmp = gv_users[["email", ts_col]].copy()
             tmp["_email"] = _normalise_emails(tmp["email"])
-            tmp["_date"] = pd.to_datetime(tmp[ts_col], errors="coerce").dt.date
+            tmp["_date"] = pd.to_datetime(tmp[ts_col], errors="coerce", utc=True).dt.date
             for _, row in tmp.dropna(subset=["_email", "_date"]).iterrows():
                 _record_email(row["_email"], str(row["_date"]))
 
@@ -670,7 +822,7 @@ def compute_participants_timeline() -> dict[str, Any]:
         if df.empty or "created_at" not in df.columns:
             continue
         df = df.copy()
-        df["_date"] = pd.to_datetime(df["created_at"], errors="coerce").dt.date
+        df["_date"] = pd.to_datetime(df["created_at"], errors="coerce", utc=True).dt.date
 
         # via author_id → gv_users join (merge locally to keep date aligned)
         if "author_id" in df.columns:
@@ -701,7 +853,7 @@ def compute_participants_timeline() -> dict[str, Any]:
         users_df = store.get("gv_users")
         if users_df is not None and "email" in users_df.columns:
             tmp = gv_reactions[["user_id", "created_at"]].copy()
-            tmp["_date"] = pd.to_datetime(tmp["created_at"], errors="coerce").dt.date
+            tmp["_date"] = pd.to_datetime(tmp["created_at"], errors="coerce", utc=True).dt.date
             merged = tmp.merge(
                 users_df[["id", "email"]].rename(columns={"id": "user_id"}),
                 on="user_id",
@@ -720,7 +872,7 @@ def compute_participants_timeline() -> dict[str, Any]:
         if ts_col not in tf_df.columns:
             continue
         tf_clean = tf_df.reset_index(drop=True)
-        dates = pd.to_datetime(tf_clean[ts_col], errors="coerce").dt.date
+        dates = pd.to_datetime(tf_clean[ts_col], errors="coerce", utc=True).dt.date
         tf_em = _tf_emails(tf_clean)
         for idx, email in tf_em.items():
             d = dates.get(idx)
@@ -734,7 +886,7 @@ def compute_participants_timeline() -> dict[str, Any]:
         df = store.get(key, pd.DataFrame())
         if df.empty or "created_at" not in df.columns:
             continue
-        dates = pd.to_datetime(df["created_at"], errors="coerce").dt.date
+        dates = pd.to_datetime(df["created_at"], errors="coerce", utc=True).dt.date
         for idx, row in df.iterrows():
             has_author = pd.notna(row.get("author_id"))
             has_email = not _row_has_no_email(row)
@@ -749,7 +901,7 @@ def compute_participants_timeline() -> dict[str, Any]:
         ts_col = "submitted_at" if "submitted_at" in tf_df.columns else "created_at"
         if ts_col not in tf_df.columns:
             continue
-        dates = pd.to_datetime(tf_df[ts_col], errors="coerce").dt.date
+        dates = pd.to_datetime(tf_df[ts_col], errors="coerce", utc=True).dt.date
         for idx, _row in tf_df.iterrows():
             email_val = tf_df.at[idx, "email"] if "email" in tf_df.columns else (
                 tf_df.at[idx, "hidden_email"] if "hidden_email" in tf_df.columns else None
@@ -802,6 +954,121 @@ def compute_participants_timeline() -> dict[str, Any]:
         })
 
     return {"timeline": timeline}
+
+
+# ---------------------------------------------------------------------------
+# Visits timeline (GoVocal Insights API)
+# ---------------------------------------------------------------------------
+
+def compute_visits_timeline() -> dict[str, Any]:
+    """Fetch daily visit counts from the GoVocal Insights Visits API.
+
+    Returns ``{visits: [{date, visitors, visits}, ...]}``.  The API
+    response uses ``date_group`` for the date, ``visitors`` for unique
+    visitors, and ``visits`` for total page-loads.
+    """
+    try:
+        gv = GoVocalClient()
+        raw = gv.get_visits(resolution="day")
+    except Exception as exc:
+        log.error("Failed to fetch visits: %s", exc)
+        return {"visits": [], "error": str(exc)}
+
+    visits: list[dict[str, Any]] = []
+    for entry in raw:
+        date_val = entry.get("date_group")
+        if date_val is None:
+            continue
+        date_str = str(date_val)[:10]
+        visits.append({
+            "date": date_str,
+            "visitors": int(entry.get("visitors", 0)),
+            "visits": int(entry.get("visits", 0)),
+        })
+
+    visits.sort(key=lambda v: v["date"])
+    return {"visits": visits}
+
+
+# ---------------------------------------------------------------------------
+# GoVocal Participation Rate (users vs visits)
+# ---------------------------------------------------------------------------
+
+def compute_participation_rate() -> dict[str, Any]:
+    """Compute GoVocal Participation Rate over 24 h, 36 h and 7 days.
+
+    Participation rate = (GoVocal registered users / total visits) * 100.
+
+    We count *new* GoVocal users created within each window and total visits
+    within the same window.
+    """
+    now = datetime.now(timezone.utc)
+    windows = {
+        "24h": now - timedelta(hours=24),
+        "72h": now - timedelta(hours=72),
+        "7d": now - timedelta(days=7),
+    }
+
+    # --- Users created within each window ---
+    gv_users = store.get("gv_users", pd.DataFrame())
+    user_counts: dict[str, int] = {}
+    if not gv_users.empty:
+        ts_col = (
+            "registration_completed_at"
+            if "registration_completed_at" in gv_users.columns
+            else "created_at"
+        )
+        if ts_col in gv_users.columns:
+            gv_users = gv_users.copy()
+            gv_users["_ts"] = pd.to_datetime(gv_users[ts_col], errors="coerce", utc=True)
+            for label, cutoff in windows.items():
+                user_counts[label] = int((gv_users["_ts"] >= cutoff).sum())
+        else:
+            for label in windows:
+                user_counts[label] = 0
+    else:
+        for label in windows:
+            user_counts[label] = 0
+
+    # --- Total users (all time) ---
+    total_users = len(gv_users)
+
+    # --- Visits within each window ---
+    visits_data = compute_visits_timeline()
+    visits_list = visits_data.get("visits", [])
+
+    visit_counts: dict[str, int] = {}
+    total_visits = sum(v["visitors"] for v in visits_list)
+    for label, cutoff in windows.items():
+        cutoff_str = cutoff.strftime("%Y-%m-%d")
+        visit_counts[label] = sum(
+            v["visitors"] for v in visits_list if v["date"] >= cutoff_str
+        )
+
+    # --- Rates ---
+    rates: dict[str, Any] = {}
+    for label in windows:
+        users = user_counts[label]
+        visits = visit_counts[label]
+        rate = (users / visits * 100) if visits else 0.0
+        rates[label] = {
+            "users": users,
+            "visits": visits,
+            "rate_pct": round(rate, 2),
+        }
+
+    # All-time rate
+    all_time_rate = (total_users / total_visits * 100) if total_visits else 0.0
+
+    return {
+        "label": "GoVocal Participation Rate",
+        "rates": rates,
+        "all_time": {
+            "users": total_users,
+            "visits": total_visits,
+            "rate_pct": round(all_time_rate, 2),
+        },
+    }
 
 
 # ---------------------------------------------------------------------------

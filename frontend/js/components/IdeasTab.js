@@ -27,7 +27,19 @@ const IdeasTab = {
         </div>
 
         <!-- Ideas table -->
-        <h3 class="section-title">Ideas ({{ sortedIdeas.length }})</h3>
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:4px;">
+          <h3 class="section-title" style="margin-bottom:0">Ideas ({{ sortedIdeas.length }})</h3>
+          <div style="display:flex; align-items:center; gap:6px; margin-left:auto;">
+            <label style="font-size:0.82rem; color:#94a3b8;">Score method:</label>
+            <select v-model="scoringMethod" style="font-size:0.82rem; padding:2px 6px; border-radius:4px; border:1px solid #334155; background:#1e293b; color:#e2e8f0;">
+              <option value="jsd">JSD (Diversity)</option>
+              <option value="wmga">WMGA (Group Approval)</option>
+            </select>
+          </div>
+          <button class="export-btn" @click="exportCSV" title="Download top 100 ideas as CSV">
+            &#x2B07; Export CSV
+          </button>
+        </div>
         <div class="table-container">
           <table>
             <thead>
@@ -53,7 +65,7 @@ const IdeasTab = {
                   <span class="sort-arrow">{{ sortArrow('approval') }}</span>
                 </th>
                 <th @click="sortBy('bridging')" style="width:160px">
-                  Bridging Score
+                  Consensus Score
                   <span class="info-icon"
                         @mouseenter="showTooltip($event, 'Measures how broadly an idea is supported across demographic groups (0-100). Factors in approval ratio (likes vs dislikes), engagement volume (more reactions = higher weight), demographic diversity of support (Political Lean 50%, Urban/Rural 20%, Age 10%, Race 10%, Region 10%), and engagement level. Higher = wider cross-group appeal with strong approval and participation.')"
                         @mouseleave="hideTooltip"
@@ -102,6 +114,7 @@ const IdeasTab = {
         <idea-detail
           v-if="selectedIdeaId"
           :idea-id="selectedIdeaId"
+          :scoring-method="scoringMethod"
           @close="selectedIdeaId = null"
         ></idea-detail>
 
@@ -118,6 +131,7 @@ const IdeasTab = {
       selectedIdeaId: null,
       sortKey: 'bridging',
       sortDesc: true,
+      scoringMethod: 'jsd',
       currentPage: 1,
       pageSize: 25,
       tooltip: { visible: false, text: '', x: 0, y: 0 },
@@ -150,9 +164,10 @@ const IdeasTab = {
           va = totalA > 0 ? a.reactions.upvotes / totalA : -1;
           vb = totalB > 0 ? b.reactions.upvotes / totalB : -1;
         } else {
-          // bridging
-          va = (a.bridging && a.bridging.bridging_score != null) ? a.bridging.bridging_score : -1;
-          vb = (b.bridging && b.bridging.bridging_score != null) ? b.bridging.bridging_score : -1;
+          // bridging — use selected scoring method
+          const scoreKey = this.scoringMethod === 'wmga' ? 'wmga_score' : 'consensus_score';
+          va = (a.bridging && a.bridging[scoreKey] != null) ? a.bridging[scoreKey] : -1;
+          vb = (b.bridging && b.bridging[scoreKey] != null) ? b.bridging[scoreKey] : -1;
         }
         return desc ? vb - va : va - vb;
       });
@@ -179,8 +194,11 @@ const IdeasTab = {
       this.themes = this.preloaded.themes || {};
       this.loading = false;
 
-      this.$nextTick(() => this.renderThemesChart());
+      this.$nextTick(() => {
+        this.renderThemesChart();
+      });
     } catch (e) {
+      console.error('[IdeasTab] mounted error:', e);
       this.error = 'Failed to load ideas data.';
       this.loading = false;
     }
@@ -239,16 +257,82 @@ const IdeasTab = {
     },
 
     bridgingLabel(idea) {
-      if (!idea.bridging || idea.bridging.bridging_score == null) return 'N/A';
-      return idea.bridging.bridging_score.toFixed(1);
+      if (!idea.bridging) return 'N/A';
+      const score = this.scoringMethod === 'wmga' ? idea.bridging.wmga_score : idea.bridging.consensus_score;
+      if (score == null) return 'N/A';
+      return score.toFixed(1);
     },
 
     bridgingClass(idea) {
-      if (!idea.bridging || idea.bridging.bridging_score == null) return 'bridging-badge bridging-na';
-      const s = idea.bridging.bridging_score;
+      if (!idea.bridging) return 'bridging-badge bridging-na';
+      const s = this.scoringMethod === 'wmga' ? idea.bridging.wmga_score : idea.bridging.consensus_score;
+      if (s == null) return 'bridging-badge bridging-na';
       if (s >= 70) return 'bridging-badge bridging-high';
       if (s >= 45) return 'bridging-badge bridging-med';
       return 'bridging-badge bridging-low';
+    },
+
+    exportCSV() {
+      const top = this.sortedIdeas.slice(0, 100);
+      const demoDims = ['age_bucket', 'race', 'political_lean', 'region', 'urban_rural'];
+      const demoHeaders = [];
+      demoDims.forEach(dim => {
+        demoHeaders.push(dim + '_upvotes');
+        demoHeaders.push(dim + '_downvotes');
+      });
+
+      const headers = ['Rank', 'Title', 'Description', 'Consensus Score (JSD)', 'Consensus Score (WMGA)', 'Approval Rating', 'Likes', 'Dislikes', ...demoHeaders];
+
+      const escapeCSV = (val) => {
+        const s = String(val == null ? '' : val);
+        if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+          return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+      };
+
+      const formatBuckets = (buckets) => {
+        if (!buckets || !Object.keys(buckets).length) return '';
+        return Object.entries(buckets).map(([k, v]) => k + ': ' + v).join('; ');
+      };
+
+      const rows = top.map((idea, idx) => {
+        const total = idea.reactions.upvotes + idea.reactions.downvotes;
+        const approval = total > 0 ? ((idea.reactions.upvotes / total) * 100).toFixed(1) + '%' : 'N/A';
+        const jsdScore = (idea.bridging && idea.bridging.consensus_score != null)
+          ? idea.bridging.consensus_score.toFixed(1) : 'N/A';
+        const wmgaScore = (idea.bridging && idea.bridging.wmga_score != null)
+          ? idea.bridging.wmga_score.toFixed(1) : 'N/A';
+        const bd = (idea.reactions && idea.reactions.demographic_breakdown) || {};
+
+        const demoCols = [];
+        demoDims.forEach(dim => {
+          const dimData = bd[dim] || {};
+          demoCols.push(formatBuckets(dimData.upvotes));
+          demoCols.push(formatBuckets(dimData.downvotes));
+        });
+
+        return [
+          idx + 1,
+          idea.title || '',
+          idea.body || '',
+          jsdScore,
+          wmgaScore,
+          approval,
+          idea.reactions.upvotes,
+          idea.reactions.downvotes,
+          ...demoCols,
+        ].map(escapeCSV).join(',');
+      });
+
+      const csv = [headers.join(','), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ideas_export.csv';
+      a.click();
+      URL.revokeObjectURL(url);
     },
 
     renderThemesChart() {
@@ -256,24 +340,27 @@ const IdeasTab = {
       if (!canvas || !this.themes.selections || !this.themes.selections.length) return;
 
       const sorted = [...this.themes.selections].sort((a, b) => b.count - a.count);
-      const labels = sorted.map(s => s.idea);
-      const data = sorted.map(s => s.count);
+      this._themesChart = this._makeBarChart(
+        canvas,
+        sorted.map(s => s.idea),
+        sorted.map(s => s.count),
+        'selections',
+      );
+    },
 
-      // Color palette
+    _makeBarChart(canvas, labels, data, tooltipSuffix) {
       const colors = [
         '#003366', '#0564B8', '#059669', '#d97706', '#dc2626',
         '#36A0E0', '#C2DFED', '#E4E0D4', '#84cc16', '#f97316',
       ];
-      const bgColors = data.map((_, i) => colors[i % colors.length]);
-
-      this._themesChart = new Chart(canvas, {
+      return new Chart(canvas, {
         type: 'bar',
         data: {
           labels,
           datasets: [{
-            label: 'Selections',
+            label: tooltipSuffix,
             data,
-            backgroundColor: bgColors,
+            backgroundColor: data.map((_, i) => colors[i % colors.length]),
             borderRadius: 4,
           }],
         },
@@ -297,7 +384,7 @@ const IdeasTab = {
             legend: { display: false },
             tooltip: {
               callbacks: {
-                label: (ctx) => `${ctx.raw} selections`,
+                label: (ctx) => `${ctx.raw} ${tooltipSuffix}`,
               },
             },
           },

@@ -152,6 +152,32 @@ def _ingest_govocal(gv: GoVocalClient) -> dict[str, pd.DataFrame]:
         log.error(msg)
         errors.append(msg)
 
+    # --- Input topics (idea tags) ---
+    try:
+        input_topics_raw = gv.get_input_topics()
+        if input_topics_raw:
+            frames["gv_input_topics"] = pd.json_normalize(input_topics_raw)
+            log.info("GoVocal: %d input topics loaded", len(input_topics_raw))
+        else:
+            frames["gv_input_topics"] = pd.DataFrame()
+    except Exception as exc:
+        msg = f"GoVocal input topics error: {exc}"
+        log.error(msg)
+        errors.append(msg)
+
+    # --- Idea ↔ input topic associations ---
+    try:
+        ideas_topics_raw = gv.get_ideas_input_topics()
+        if ideas_topics_raw:
+            frames["gv_ideas_input_topics"] = pd.json_normalize(ideas_topics_raw)
+            log.info("GoVocal: %d idea-topic associations loaded", len(ideas_topics_raw))
+        else:
+            frames["gv_ideas_input_topics"] = pd.DataFrame()
+    except Exception as exc:
+        msg = f"GoVocal idea-topic associations error: {exc}"
+        log.error(msg)
+        errors.append(msg)
+
     if errors:
         meta["errors"].extend(errors)
 
@@ -518,6 +544,23 @@ def _ingest_govocal_incremental(gv: GoVocalClient) -> None:
     except Exception as exc:
         errors.append(f"GoVocal reactions incremental error: {exc}")
         log.error("GoVocal reactions incremental error: %s", exc)
+
+    # --- Input topics & associations: always full (static, tiny datasets) ---
+    try:
+        input_topics_raw = gv.get_input_topics()
+        store["gv_input_topics"] = pd.json_normalize(input_topics_raw) if input_topics_raw else pd.DataFrame()
+        log.info("GoVocal input topics: %d loaded", len(input_topics_raw or []))
+    except Exception as exc:
+        errors.append(f"GoVocal input topics error: {exc}")
+        log.error("GoVocal input topics error: %s", exc)
+
+    try:
+        ideas_topics_raw = gv.get_ideas_input_topics()
+        store["gv_ideas_input_topics"] = pd.json_normalize(ideas_topics_raw) if ideas_topics_raw else pd.DataFrame()
+        log.info("GoVocal idea-topic associations: %d loaded", len(ideas_topics_raw or []))
+    except Exception as exc:
+        errors.append(f"GoVocal idea-topic associations error: {exc}")
+        log.error("GoVocal idea-topic associations error: %s", exc)
 
     if errors:
         meta["errors"].extend(errors)
