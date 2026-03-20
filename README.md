@@ -16,7 +16,13 @@ A Flask-based backend that aggregates civic-engagement data from **GoVocal** and
   - [Data](#data)
   - [Analytics](#analytics)
   - [Ideas](#ideas)
-- [Consensus Score Algorithm](#consensus-score-algorithm)
+- [Consensus Score Algorithms](#consensus-score-algorithms)
+  - [Algorithm 1: JSD-Based (Default)](#algorithm-1-jsd-based-default)
+  - [Algorithm 2: WMGA (Weighted Mean Group Approval)](#algorithm-2-wmga-weighted-mean-group-approval)
+  - [Shared: Polarization Penalty](#shared-polarization-penalty)
+  - [Shared: Confidence](#shared-confidence)
+  - [Reported Metrics](#reported-metrics)
+  - [Design Decisions](#design-decisions)
 - [Deployment](#deployment)
 
 ---
@@ -423,7 +429,23 @@ Unified view of every ideation idea, sorted by total reactions (descending). Eac
         "region": 0.02,
         "urban_rural": 0.01
       },
-      "polarization_penalty": 0.19
+      "polarization_penalty": 0.19,
+      "wmga_score": 58.7,
+      "wmga_per_dimension": {
+        "political_lean": 0.72,
+        "age_bucket": 0.80,
+        "race": 0.85,
+        "region": 0.82,
+        "urban_rural": 0.88
+      },
+      "wmga_polarization_scores": {
+        "political_lean": 0.35,
+        "age_bucket": 0.05,
+        "race": 0.08,
+        "region": 0.02,
+        "urban_rural": 0.01
+      },
+      "wmga_polarization_penalty": 0.19
     }
   }
 ]
@@ -445,19 +467,28 @@ Useful for surfacing ideas with broad cross-demographic support.
 
 ---
 
-## Consensus Score Algorithm
+## Consensus Score Algorithms
 
 The **consensus score** measures how broadly an idea is supported across demographic groups, inspired by bridging algorithms used in platforms like Pol.is. Unlike Pol.is (which infers groups from voting patterns), this implementation uses direct demographic data.
 
-### Formula
+Two scoring algorithms are available (both are computed for every idea and returned in the API response; the frontend lets users toggle between them):
 
-The final consensus score (0–100) is:
+| Algorithm | Key | Best For |
+|---|---|---|
+| **JSD-Based** (default) | `consensus_score` | Measuring whether supporters look like the overall population |
+| **WMGA** (Weighted Mean Group Approval) | `wmga_score` | Measuring whether every demographic group actually approves |
+
+Both algorithms share the same **polarization penalty** and **confidence** scaling (described below).
+
+---
+
+### Algorithm 1: JSD-Based (Default)
 
 ```
 consensus_score = Approval × Diversity × Confidence × 100
 ```
 
-This keeps the score simple and explainable: an idea must be **approved**, **demographically diverse**, and **backed by sufficient data** to score well.
+An idea must be **approved**, **demographically diverse**, and **backed by sufficient data** to score well.
 
 #### 1. Approval (0–1)
 
@@ -494,55 +525,142 @@ diversity = upvote_diversity × polarization_factor
 
 **Per-dimension score** = `1 - JS_distance(idea_upvotes, population_baseline)`
 
-where JS distance is the Jensen-Shannon distance (square root of the JS divergence). A score of 1.0 means the idea's upvoters perfectly mirror the overall voter population for that dimension. Using the distance (not squared divergence) provides better sensitivity to shifts among minority subgroups.
+where **JS distance** is the Jensen-Shannon distance (square root of the JS divergence), computed via `scipy.spatial.distance.jensenshannon`. A score of 1.0 means the idea's upvoters perfectly mirror the overall voter population for that dimension. Using the distance (not squared divergence) provides better sensitivity to shifts among minority subgroups.
+
+**Epsilon smoothing**: Before computing JSD, a small epsilon (`1e-10`) is added to both probability vectors and they are re-normalised. This prevents `log(0)` errors when a category appears in one distribution but not the other.
 
 **Coverage adjustment**: Base weights are scaled by each dimension's data coverage (fraction of reactions with a value for that dimension), then renormalized. This prevents dimensions with sparse data from distorting the score.
 
-**Polarization penalty**: For each demographic dimension, the algorithm computes the **variance of per-group approval rates** — a direct measure of whether different groups feel differently about the idea. Groups with fewer than 5 votes are excluded. The variance is normalised to [0, 1] and combined using coverage-adjusted weights:
+#### 3. Polarization & Confidence
+
+See [Polarization Penalty](#shared-polarization-penalty) and [Confidence](#shared-confidence) below — both are shared with WMGA.
+
+---
+
+### Algorithm 2: WMGA (Weighted Mean Group Approval)
 
 ```
-weighted_polarization = Σ (effective_weight[dim] × polarization[dim])
-polarization_factor = 1 - 0.6 × weighted_polarization
+wmga_score = WeightedDimAvg × Polarization_Factor × Confidence × 100
 ```
+
+Where JSD asks *"Do the supporters look like the population?"*, WMGA asks *"Does every demographic group actually approve of this idea?"*.
+
+#### Per-Group Smoothed Approval
+
+For each group within a dimension, compute a **Bayesian-smoothed approval rate**:
+
+```
+smoothed_approval = (group_upvotes + prior_strength × platform_approval)
+                  / (group_votes   + prior_strength)
+```
+
+| Parameter | Value | Description |
+|---|---|---|
+| `prior_strength` | 15 | How aggressively small samples shrink toward the global mean |
+| `platform_approval` | *(computed)* | Platform-wide upvote ratio across all reactions |
+
+Groups with zero votes on the idea shrink entirely to `platform_approval` — they neither help nor hurt the score. As a group accumulates votes, its smoothed rate converges to its actual approval rate.
+
+#### Per-Dimension Score
+
+The per-dimension WMGA score is the **population-weighted mean** of smoothed group approvals:
+
+```
+dim_score = Σ (population_weight[group] × smoothed_approval[group])
+```
+
+where `population_weight[group]` is the group's share in the overall voter population baseline (the same baseline used by the JSD algorithm).
+
+#### Final WMGA Score
+
+Dimension scores are combined using the same coverage-adjusted effective weights, then multiplied by the polarization factor and confidence:
+
+```
+weighted_dim_avg = Σ (effective_weight[dim] × dim_score[dim])
+wmga_score = weighted_dim_avg × polarization_factor × confidence × 100
+```
+
+The frontend also receives **per-dimension penalised scores** (`wmga_per_dimension`), where each dimension's WMGA score is independently multiplied by its own polarization penalty:
+
+```
+wmga_per_dimension[dim] = dim_score[dim] × (1 - polarization_weight × polarization[dim])
+```
+
+---
+
+### Shared: Polarization Penalty
+
+Both algorithms apply the same polarization penalty.
+
+For each demographic dimension, the algorithm computes the **variance of per-group approval rates** — a direct measure of whether different groups feel differently about the idea. Groups with fewer than **20** votes are excluded to avoid noisy estimates. The variance is normalised to [0, 1] (divided by the theoretical maximum variance of 0.25) and combined using coverage-adjusted weights:
+
+```
+per_dim_polarization[dim] = variance(group_approval_rates) / 0.25   # capped at 1.0
+
+weighted_polarization = Σ (effective_weight[dim] × per_dim_polarization[dim])
+polarization_factor   = 1 - 1.0 × weighted_polarization
+```
+
+The penalty weight is **1.0**, meaning maximum polarization completely zeroes out the diversity/WMGA component:
 
 | Weighted Polarization | Penalty Factor | Score Impact |
 |-----------------------|----------------|-------------|
 | 0.0                   | 1.00           | No penalty  |
-| 0.2                   | 0.88           | -12%        |
-| 0.5                   | 0.70           | -30%        |
-| 1.0                   | 0.40           | -60%        |
+| 0.2                   | 0.80           | −20%        |
+| 0.5                   | 0.50           | −50%        |
+| 1.0                   | 0.00           | −100%       |
 
-#### 3. Confidence (0–1)
+---
 
-Scales the score by how much demographic data is available:
+### Shared: Confidence
+
+Both algorithms use the same confidence scaling:
 
 ```
 confidence = min(1, known_demo_reactions / 50)
 ```
 
-If fewer than **20 reactions** have known demographics, the consensus score is `null` (insufficient data). Full confidence is reached at 50 reactions with known demographics.
+If fewer than **20 reactions** have known demographics, the consensus score is `null` (insufficient data). Full confidence is reached at **50** reactions with known demographics.
+
+---
 
 ### Reported Metrics
 
+**JSD algorithm:**
+
+- **`consensus_score`**: Final JSD-based score (0–100), or `null` if insufficient data.
 - **`approval_ratio`**: Upvotes / total votes (0–1).
 - **`demographic_coverage`**: Fraction of reactions with known demographics.
 - **`demographic_confidence`**: The confidence multiplier (0–1).
-- **`per_dimension_scores`**: Individual dimension diversity scores (JS distance from population baseline).
-- **`polarization_scores`**: Per-dimension polarization values (approval-rate variance across groups). High values indicate the idea is divisive along that demographic axis.
+- **`per_dimension_scores`**: Per-dimension diversity scores (`1 − JS_distance` from population baseline).
+- **`polarization_scores`**: Per-dimension polarization values (normalised approval-rate variance). High values indicate the idea is divisive along that demographic axis.
 - **`polarization_penalty`**: The weighted polarization value used to compute the penalty factor.
-- **`confidence_level`**: "low" / "medium" / "high" based on data availability.
+- **`confidence_level`**: `"low"` / `"medium"` / `"high"` based on data availability.
+
+**WMGA algorithm:**
+
+- **`wmga_score`**: Final WMGA-based score (0–100), or `null` if insufficient data.
+- **`wmga_per_dimension`**: Per-dimension WMGA scores after applying each dimension's individual polarization penalty.
+- **`wmga_polarization_scores`**: Per-dimension polarization values (same variance calculation as JSD).
+- **`wmga_polarization_penalty`**: The weighted polarization value used for the WMGA penalty factor.
+
+---
 
 ### Design Decisions
 
-1. **Simple multiplicative formula**: `Approval × Diversity × Confidence` is easy to explain to non-technical audiences. Each factor is intuitive: "Do people like it?", "Do all kinds of people like it?", "Do we have enough data to be sure?"
+1. **Simple multiplicative formula**: `Approval × Diversity × Confidence` (JSD) and `WeightedDimAvg × Polarization × Confidence` (WMGA) are easy to explain to non-technical audiences. Each factor is intuitive: "Do people like it?", "Do all kinds of people like it?", "Do we have enough data to be sure?"
 
-2. **Population-relative diversity**: Uses JS distance from the actual voter population rather than theoretical equal distribution. This accounts for structural imbalances (e.g., if 85% of voters are White, a "perfectly bridging" idea doesn't need equal race representation).
+2. **Two complementary algorithms**: JSD measures *representativeness* of supporters (do upvoters look like the population?). WMGA measures *universality* of approval (does every group approve?). An idea can score differently on each — e.g., if a small minority is absent from upvoters but wouldn't downvote, JSD penalises more than WMGA.
 
-3. **Polarization detection**: Per-group approval-rate variance directly measures whether different demographic subgroups feel differently about an idea. This catches polarization that JSD-based diversity scoring misses — e.g., when a small but cohesive minority group unanimously opposes an idea, the upvote distribution may still look representative, but the approval-rate variance will flag the split.
+3. **Population-relative diversity**: Uses JS distance from the actual voter population rather than theoretical equal distribution. This accounts for structural imbalances (e.g., if 85% of voters are White, a "perfectly bridging" idea doesn't need equal race representation).
 
-4. **Sparse data handling**: Only reactions with known demographics are used. Demographics come primarily from Typeform respondents who also have GoVocal accounts — many GoVocal-only users lack demographic data.
+4. **Bayesian smoothing (WMGA)**: The prior (`prior_strength = 15`, centred on platform-wide approval) prevents groups with very few votes from dominating the score. A group with 1 upvote and 0 downvotes won't read as 100% approval — it will be pulled toward the global average.
 
-5. **All factors are multiplicative**: An idea must pass all three gates (approval, diversity, confidence) to achieve a high score. A zero on any factor kills the score.
+5. **Polarization detection**: Per-group approval-rate variance directly measures whether different demographic subgroups feel differently about an idea. This catches polarization that JSD-based diversity scoring misses — e.g., when a small but cohesive minority group unanimously opposes an idea, the upvote distribution may still look representative, but the approval-rate variance will flag the split.
+
+6. **Sparse data handling**: Only reactions with known demographics are used. Demographics come primarily from Typeform respondents who also have GoVocal accounts — many GoVocal-only users lack demographic data.
+
+7. **All factors are multiplicative**: An idea must pass all gates (approval/WMGA, diversity/polarization, confidence) to achieve a high score. A zero on any factor kills the score.
 
 ---
 

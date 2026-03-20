@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import hmac
 import logging
 import os
 
 from flask import Flask, jsonify, request, send_from_directory
+from flask_httpauth import HTTPBasicAuth
 
 from backend.config import Config
 from backend.data_store import get_summary, load_from_cache, meta, refresh_all, refresh_incremental, store
@@ -21,6 +23,26 @@ log = logging.getLogger(__name__)
 
 # ── App factory ──────────────────────────────────────────────────────────
 app = Flask(__name__, static_folder="frontend", static_url_path="/static")
+
+# ── Authentication ───────────────────────────────────────────────────────
+auth = HTTPBasicAuth()
+
+
+@auth.verify_password
+def _verify(username, password):
+    expected_user = Config.ADMIN_USERNAME
+    expected_pass = Config.ADMIN_PASSWORD
+    if not expected_user or not expected_pass:
+        return None
+    if hmac.compare_digest(username, expected_user) and hmac.compare_digest(password, expected_pass):
+        return username
+    return None
+
+
+@app.before_request
+def _require_auth():
+    """Protect every route with HTTP Basic Auth."""
+    return auth.login_required(lambda: None)()
 
 
 # ── Startup hook ─────────────────────────────────────────────────────────
