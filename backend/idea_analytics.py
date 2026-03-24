@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -234,6 +235,10 @@ _EMPTY_DEMO: dict[str, str | None] = {
 _email_demo_cache: dict[str, dict[str, str | None]] = {}
 _userid_email_map: dict[str, str] = {}
 
+# Lock protecting all lazy cache builders against concurrent access
+# from gunicorn threads.
+_cache_lock = threading.Lock()
+
 
 def _build_email_demo_cache() -> None:
     """Build an email → best-merged demographics dict from unified_demographics.
@@ -269,10 +274,11 @@ def _build_email_demo_cache() -> None:
                 if val is not None:
                     entry[field] = val
 
-    # Now convert to the final format with normalised labels and geo
+    # Build into a local dict first, then assign atomically
+    new_cache: dict[str, dict[str, str | None]] = {}
     for email, raw in merged.items():
         geo = _resolve_geo(raw["zipcode"])
-        _email_demo_cache[email] = {
+        new_cache[email] = {
             "age_bucket": _age_bucket(raw["age"]),
             "race": _human_race(raw["race"]),
             "region": geo["region"],
@@ -280,6 +286,7 @@ def _build_email_demo_cache() -> None:
             "political_lean": _human_political(raw["political_lean"]),
         }
 
+    _email_demo_cache = new_cache
     log.info("Email demo cache: %d emails with demographics", len(_email_demo_cache))
 
 
@@ -293,12 +300,14 @@ def _build_userid_email_map() -> None:
     if users is None:
         return
 
+    new_map: dict[str, str] = {}
     for _, row in users.iterrows():
         uid = _clean_val(row.get("id"))
         email = _clean_val(row.get("email"))
         if uid and email:
-            _userid_email_map[uid] = email.lower().strip()
+            new_map[uid] = email.lower().strip()
 
+    _userid_email_map = new_map
     log.info("User ID → email map: %d entries", len(_userid_email_map))
 
 
@@ -371,17 +380,24 @@ def _ensure_user_demo_cache() -> None:
     if _user_demo_cache:
         return
 
-    _build_email_demo_cache()
-    _build_userid_email_map()
+    with _cache_lock:
+        # Double-check after acquiring lock
+        if _user_demo_cache:
+            return
 
-    for uid, email in _userid_email_map.items():
-        demo = _email_demo_cache.get(email)
-        if demo:
-            _user_demo_cache[uid] = dict(demo)
-        else:
-            _user_demo_cache[uid] = dict(_EMPTY_DEMO)
+        _build_email_demo_cache()
+        _build_userid_email_map()
 
-    log.info("User demo cache: %d user IDs", len(_user_demo_cache))
+        new_cache: dict[str, dict[str, str | None]] = {}
+        for uid, email in _userid_email_map.items():
+            demo = _email_demo_cache.get(email)
+            if demo:
+                new_cache[uid] = dict(demo)
+            else:
+                new_cache[uid] = dict(_EMPTY_DEMO)
+
+        _user_demo_cache = new_cache
+        log.info("User demo cache: %d user IDs", len(_user_demo_cache))
 
 
 # ---------------------------------------------------------------------------
@@ -404,45 +420,54 @@ def _build_population_baseline() -> None:
     global _population_baseline, _population_baseline_built
     if _population_baseline_built:
         return
-    _population_baseline_built = True
 
-    _ensure_user_demo_cache()
+    with _cache_lock:
+        # Double-check after acquiring lock
+        if _population_baseline_built:
+            return
 
-    reactions_df = store.get("gv_reactions", pd.DataFrame())
-    if reactions_df.empty:
-        log.warning("No reactions data — population baseline will be empty")
-        return
+        _ensure_user_demo_cache()
 
-    # Get unique voter user_ids (users who have reacted to at least one idea)
-    voter_ids = set()
-    if "user_id" in reactions_df.columns:
-        voter_ids = set(reactions_df["user_id"].dropna().unique())
+        reactions_df = store.get("gv_reactions", pd.DataFrame())
+        if reactions_df.empty:
+            log.warning("No reactions data — population baseline will be empty")
+            _population_baseline_built = True
+            return
 
-    # Collect demographic values for each dimension
-    dim_values: dict[str, list[str]] = {dim: [] for dim in BRIDGING_DIMENSIONS}
+        # Get unique voter user_ids (users who have reacted to at least one idea)
+        voter_ids = set()
+        if "user_id" in reactions_df.columns:
+            voter_ids = set(reactions_df["user_id"].dropna().unique())
 
-    for uid in voter_ids:
-        demo = _user_demo_cache.get(uid, {})
-        for dim in BRIDGING_DIMENSIONS:
-            val = demo.get(dim)
-            if val is not None:
-                dim_values[dim].append(val)
+        # Collect demographic values for each dimension
+        dim_values: dict[str, list[str]] = {dim: [] for dim in BRIDGING_DIMENSIONS}
 
-    # Convert to probability distributions
-    for dim, values in dim_values.items():
-        if not values:
-            _population_baseline[dim] = {}
-            continue
-        total = len(values)
-        counts: dict[str, int] = {}
-        for v in values:
-            counts[v] = counts.get(v, 0) + 1
-        _population_baseline[dim] = {k: v / total for k, v in counts.items()}
+        for uid in voter_ids:
+            demo = _user_demo_cache.get(uid, {})
+            for dim in BRIDGING_DIMENSIONS:
+                val = demo.get(dim)
+                if val is not None:
+                    dim_values[dim].append(val)
 
-    log.info(
-        "Population baseline built: %s",
-        {dim: len(dist) for dim, dist in _population_baseline.items()},
-    )
+        # Build into local dict, then assign atomically
+        new_baseline: dict[str, dict[str, float]] = {}
+        for dim, values in dim_values.items():
+            if not values:
+                new_baseline[dim] = {}
+                continue
+            total = len(values)
+            counts: dict[str, int] = {}
+            for v in values:
+                counts[v] = counts.get(v, 0) + 1
+            new_baseline[dim] = {k: v / total for k, v in counts.items()}
+
+        _population_baseline = new_baseline
+        _population_baseline_built = True
+
+        log.info(
+            "Population baseline built: %s",
+            {dim: len(dist) for dim, dist in _population_baseline.items()},
+        )
 
 
 def _build_platform_approval_rate() -> None:
@@ -455,19 +480,25 @@ def _build_platform_approval_rate() -> None:
     global _platform_approval_rate, _platform_approval_rate_built
     if _platform_approval_rate_built:
         return
-    _platform_approval_rate_built = True
 
-    reactions_df = store.get("gv_reactions", pd.DataFrame())
-    if reactions_df.empty or "mode" not in reactions_df.columns:
-        return
+    with _cache_lock:
+        if _platform_approval_rate_built:
+            return
 
-    total = len(reactions_df)
-    if total == 0:
-        return
+        reactions_df = store.get("gv_reactions", pd.DataFrame())
+        if reactions_df.empty or "mode" not in reactions_df.columns:
+            _platform_approval_rate_built = True
+            return
 
-    upvotes = int((reactions_df["mode"] == "up").sum())
-    _platform_approval_rate = upvotes / total
-    log.info("Platform-wide approval rate: %.4f", _platform_approval_rate)
+        total = len(reactions_df)
+        if total == 0:
+            _platform_approval_rate_built = True
+            return
+
+        upvotes = int((reactions_df["mode"] == "up").sum())
+        _platform_approval_rate = upvotes / total
+        _platform_approval_rate_built = True
+        log.info("Platform-wide approval rate: %.4f", _platform_approval_rate)
 
 
 def get_population_demographics() -> dict[str, Any]:
@@ -542,15 +573,16 @@ def invalidate_cache() -> None:
     global _user_demo_cache, _email_demo_cache, _userid_email_map, _ZIPCODE_GEO, _ZIPCODE_GEO_LOADED
     global _population_baseline, _population_baseline_built
     global _platform_approval_rate, _platform_approval_rate_built
-    _user_demo_cache = {}
-    _email_demo_cache = {}
-    _userid_email_map = {}
-    _ZIPCODE_GEO = {}
-    _ZIPCODE_GEO_LOADED = False
-    _population_baseline = {}
-    _population_baseline_built = False
-    _platform_approval_rate = 0.5
-    _platform_approval_rate_built = False
+    with _cache_lock:
+        _user_demo_cache = {}
+        _email_demo_cache = {}
+        _userid_email_map = {}
+        _ZIPCODE_GEO = {}
+        _ZIPCODE_GEO_LOADED = False
+        _population_baseline = {}
+        _population_baseline_built = False
+        _platform_approval_rate = 0.5
+        _platform_approval_rate_built = False
 
 
 # ---------------------------------------------------------------------------

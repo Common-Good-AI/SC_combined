@@ -5,6 +5,7 @@ from __future__ import annotations
 import atexit
 import logging
 import os
+import threading
 from datetime import timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -365,6 +366,48 @@ def analytics_demographics_baseline():
     """Demographic distribution of all voters — used as JSD baseline."""
     return jsonify(idea_analytics.get_population_demographics())
 
+@app.route("/api/debug/scoring")
+def debug_scoring():
+    """Diagnostic endpoint showing the state of scoring caches."""
+    from backend.idea_analytics import (
+        _email_demo_cache, _userid_email_map, _user_demo_cache,
+        _population_baseline, _population_baseline_built,
+        _platform_approval_rate, _platform_approval_rate_built,
+        BRIDGING_DIMENSIONS,
+    )
+    import pandas as pd
+
+    reactions_df = store.get("gv_reactions", pd.DataFrame())
+    voter_ids = set()
+    if not reactions_df.empty and "user_id" in reactions_df.columns:
+        voter_ids = set(reactions_df["user_id"].dropna().unique())
+
+    users_with_demo = sum(
+        1 for d in _user_demo_cache.values()
+        if any(v is not None for v in d.values())
+    )
+    voters_with_demo = sum(
+        1 for u in voter_ids
+        if any(_user_demo_cache.get(u, {}).get(d) is not None for d in BRIDGING_DIMENSIONS)
+    )
+
+    return jsonify({
+        "email_demo_cache_size": len(_email_demo_cache),
+        "userid_email_map_size": len(_userid_email_map),
+        "user_demo_cache_size": len(_user_demo_cache),
+        "users_with_demographics": users_with_demo,
+        "population_baseline_built": _population_baseline_built,
+        "population_baseline": {
+            dim: {"groups": len(dist), "total_weight": round(sum(dist.values()), 4)}
+            for dim, dist in _population_baseline.items()
+        },
+        "platform_approval_rate": _platform_approval_rate,
+        "platform_approval_rate_built": _platform_approval_rate_built,
+        "total_reactions": len(reactions_df),
+        "unique_voters": len(voter_ids),
+        "voters_in_cache": sum(1 for u in voter_ids if u in _user_demo_cache),
+        "voters_with_demographics": voters_with_demo,
+    })
 
 # ── Entry point ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
