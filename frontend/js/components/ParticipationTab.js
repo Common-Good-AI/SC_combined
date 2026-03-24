@@ -245,10 +245,15 @@ const ParticipationTab = {
       this.participationRate = this.preloaded.participationRate || {};
       this.demographics      = this.preloaded.demographics || {};
 
-      // Default date range to full span of data
-      if (this.timeline.length) {
-        this.dateFrom = this.timeline[0].date;
-        this.dateTo   = this.timeline[this.timeline.length - 1].date;
+      // Default date range to full span of BOTH timelines so participants
+      // whose first-seen date predates the first recorded action are included.
+      const allDates = [
+        ...this.timeline.map(d => d.date),
+        ...this.participantsTimeline.map(d => d.date),
+      ].sort();
+      if (allDates.length) {
+        this.dateFrom = allDates[0];
+        this.dateTo   = allDates[allDates.length - 1];
       }
 
       this.loading = false;
@@ -334,6 +339,7 @@ const ParticipationTab = {
     renderTimelineChart() {
       const ctx = this.$refs.timelineChart;
       if (!ctx) return;
+      if (this._timelineChart) { this._timelineChart.destroy(); this._timelineChart = null; }
 
       const source = this.chartMode === 'cumulative'
         ? this.cumulativeTimeline
@@ -475,6 +481,7 @@ const ParticipationTab = {
     renderSourceChart() {
       const ctx = this.$refs.sourceChart;
       if (!ctx) return;
+      if (this._sourceChart) { this._sourceChart.destroy(); this._sourceChart = null; }
 
       const isDaily = this.sourceMode === 'daily';
       const data = isDaily
@@ -553,6 +560,7 @@ const ParticipationTab = {
     renderCategoryChart() {
       const ctx = this.$refs.categoryChart;
       if (!ctx) return;
+      if (this._categoryChart) { this._categoryChart.destroy(); this._categoryChart = null; }
 
       this._categoryChart = new Chart(ctx, {
         type: 'doughnut',

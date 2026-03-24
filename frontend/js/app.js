@@ -17,7 +17,9 @@ const DATA_ENDPOINTS = [
 const app = createApp({
   data() {
     return {
-      activeTab: 'summary',
+      activeTab: 'participation',
+      // Current user
+      user: null,
       // Loading state
       appLoading: true,
       loadError: null,
@@ -30,7 +32,14 @@ const app = createApp({
   },
 
   async mounted() {
+    // Remove static pre-loader now that Vue has mounted
+    document.getElementById('pre-loader')?.remove();
+
     try {
+      // Step 0: Fetch current user
+      const meRes = await fetch('/api/me');
+      if (meRes.ok) this.user = await meRes.json();
+
       // Step 1: Fetch summary to get record counts
       this.loadStepLabel = 'Connecting to server…';
       const summaryRes = await fetch('/api/data/summary');

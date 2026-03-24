@@ -80,6 +80,7 @@ const SummaryTab = {
     renderChart() {
       const canvas = this.$refs.themeChart;
       if (!canvas || !this.chartData.length) return;
+      if (this._themeChart) { this._themeChart.destroy(); this._themeChart = null; }
 
       const colors = [
         '#003366', '#0564B8', '#059669', '#d97706', '#dc2626',

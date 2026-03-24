@@ -338,6 +338,7 @@ const IdeasTab = {
     renderThemesChart() {
       const canvas = this.$refs.themesChart;
       if (!canvas || !this.themes.selections || !this.themes.selections.length) return;
+      if (this._themesChart) { this._themesChart.destroy(); this._themesChart = null; }
 
       const sorted = [...this.themes.selections].sort((a, b) => b.count - a.count);
       this._themesChart = this._makeBarChart(

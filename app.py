@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import hmac
+import atexit
 import logging
 import os
+from datetime import timedelta
 
-from flask import Flask, jsonify, request, send_from_directory
-from flask_httpauth import HTTPBasicAuth
+from apscheduler.schedulers.background import BackgroundScheduler
+from authlib.integrations.flask_client import OAuth
+from flask import Flask, jsonify, redirect, request, send_from_directory, session, url_for
 
 from backend.config import Config
 from backend.data_store import get_summary, load_from_cache, meta, refresh_all, refresh_incremental, store
@@ -23,26 +25,73 @@ log = logging.getLogger(__name__)
 
 # ── App factory ──────────────────────────────────────────────────────────
 app = Flask(__name__, static_folder="frontend", static_url_path="/static")
+app.secret_key = Config.SECRET_KEY or "dev-fallback-key"
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
+
+
+# ── Background scheduler (periodic data refresh) ─────────────────────────
+def _scheduled_refresh() -> None:
+    """Called by APScheduler to keep in-memory data fresh."""
+    log.info("Scheduled refresh starting (interval=%.1fh) …", Config.REFRESH_INTERVAL_HOURS)
+    try:
+        idea_analytics.invalidate_cache()
+        refresh_incremental()
+        log.info("Scheduled refresh complete.")
+    except Exception:
+        log.exception("Scheduled refresh failed")
+
+
+_scheduler = BackgroundScheduler(daemon=True)
+_scheduler.add_job(
+    _scheduled_refresh,
+    trigger="interval",
+    hours=Config.REFRESH_INTERVAL_HOURS,
+    id="data_refresh",
+    max_instances=1,   # skip if a previous run is still in progress
+    coalesce=True,     # merge missed runs into one
+)
+# Guard: in Flask dev mode the reloader spawns a child process — only start
+# the scheduler in the child (WERKZEUG_RUN_MAIN=true) or in production.
+if not app.debug or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+    _scheduler.start()
+    atexit.register(lambda: _scheduler.shutdown(wait=False))
+
+# ── Google OAuth (OpenID Connect) ────────────────────────────────────────
+oauth = OAuth(app)
+oauth.register(
+    name="google",
+    client_id=Config.GOOGLE_CLIENT_ID,
+    client_secret=Config.GOOGLE_CLIENT_SECRET,
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "openid email profile"},
+)
+
+
+# ── Email allow-list helper ─────────────────────────────────────────────
+def is_email_allowed(email: str) -> bool:
+    """Return True if *email* matches the configured allow-lists (OR logic)."""
+    email = email.lower().strip()
+    if email in Config.ALLOWED_EMAILS:
+        return True
+    domain = email.rsplit("@", 1)[-1]
+    if domain in Config.ALLOWED_DOMAINS:
+        return True
+    return False
+
 
 # ── Authentication ───────────────────────────────────────────────────────
-auth = HTTPBasicAuth()
-
-
-@auth.verify_password
-def _verify(username, password):
-    expected_user = Config.ADMIN_USERNAME
-    expected_pass = Config.ADMIN_PASSWORD
-    if not expected_user or not expected_pass:
-        return None
-    if hmac.compare_digest(username, expected_user) and hmac.compare_digest(password, expected_pass):
-        return username
-    return None
+_AUTH_EXEMPT = {"/login", "/login/google", "/auth/callback", "/api/health"}
 
 
 @app.before_request
-def _require_auth():
-    """Protect every route with HTTP Basic Auth."""
-    return auth.login_required(lambda: None)()
+def _require_login():
+    """Redirect unauthenticated users to the login page."""
+    path = request.path
+    # Allow static assets, login flow, and health check
+    if path.startswith("/static/") or path in _AUTH_EXEMPT:
+        return None
+    if not session.get("user"):
+        return redirect(url_for("login"))
 
 
 # ── Startup hook ─────────────────────────────────────────────────────────
@@ -81,6 +130,53 @@ def _lazy_load():
 
 
 # ── Routes ───────────────────────────────────────────────────────────────
+
+
+@app.route("/login")
+def login():
+    """Show a login page, or redirect to Google if already in flow."""
+    if session.get("user"):
+        return redirect("/")
+    return send_from_directory(app.static_folder, "login.html")
+
+
+@app.route("/login/google")
+def login_google():
+    """Initiate the Google OAuth flow."""
+    redirect_uri = url_for("auth_callback", _external=True)
+    return oauth.google.authorize_redirect(redirect_uri)
+
+
+@app.route("/auth/callback")
+def auth_callback():
+    """Handle the OAuth callback from Google."""
+    token = oauth.google.authorize_access_token()
+    userinfo = token.get("userinfo") or oauth.google.userinfo()
+    email = userinfo.get("email", "").lower().strip()
+    if not email:
+        return send_from_directory(app.static_folder, "denied.html"), 403
+    if not is_email_allowed(email):
+        log.warning("Access denied for email: %s", email)
+        return send_from_directory(app.static_folder, "denied.html"), 403
+    session.permanent = True
+    session["user"] = {"email": email, "name": userinfo.get("name", email)}
+    return redirect("/")
+
+
+@app.route("/logout")
+def logout():
+    """Clear the session and redirect to login."""
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/api/me")
+def api_me():
+    """Return the currently logged-in user."""
+    user = session.get("user")
+    if not user:
+        return jsonify({"error": "not authenticated"}), 401
+    return jsonify(user)
 
 
 @app.route("/")

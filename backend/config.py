@@ -28,10 +28,22 @@ class Config:
 
     # --- App ---
     DEBUG: bool = os.getenv("FLASK_DEBUG", "0") == "1"
+    REFRESH_INTERVAL_HOURS: float = float(os.getenv("REFRESH_INTERVAL_HOURS", "1"))
 
-    # --- Auth ---
-    ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "")
-    ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "")
+    # --- Auth (Google SSO) ---
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "")
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    ALLOWED_EMAILS: list[str] = [
+        e.strip().lower()
+        for e in os.getenv("ALLOWED_EMAILS", "").split(",")
+        if e.strip()
+    ]
+    ALLOWED_DOMAINS: list[str] = [
+        d.strip().lower()
+        for d in os.getenv("ALLOWED_DOMAINS", "").split(",")
+        if d.strip()
+    ]
 
     # --- Analytics (Phase 2a) ---
     # GoVocal project IDs that count as "survey" projects
@@ -60,8 +72,12 @@ class Config:
             problems.append("TF_TOKEN is not set")
         if not cls.TF_FORM_IDS:
             problems.append("TF_FORM_IDS is not set (comma-separated list)")
-        if not cls.ADMIN_USERNAME:
-            problems.append("ADMIN_USERNAME is not set")
-        if not cls.ADMIN_PASSWORD:
-            problems.append("ADMIN_PASSWORD is not set")
+        if not cls.SECRET_KEY:
+            problems.append("SECRET_KEY is not set")
+        if not cls.GOOGLE_CLIENT_ID:
+            problems.append("GOOGLE_CLIENT_ID is not set")
+        if not cls.GOOGLE_CLIENT_SECRET:
+            problems.append("GOOGLE_CLIENT_SECRET is not set")
+        if not cls.ALLOWED_EMAILS and not cls.ALLOWED_DOMAINS:
+            problems.append("At least one of ALLOWED_EMAILS or ALLOWED_DOMAINS must be set")
         return problems

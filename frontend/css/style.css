@@ -904,3 +904,106 @@ tr.clickable:hover td { background: rgba(194,223,237,.18); }
   color: #94a3b8;
   font-size: .75rem;
 }
+
+/* ── Header user info ─────────────────────────────────────────────── */
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.header-user-email {
+  font-size: 0.82rem;
+  color: var(--light-blue);
+  font-weight: 400;
+}
+.header-logout {
+  font-size: 0.78rem;
+  color: var(--grey-300);
+  text-decoration: none;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--grey-400);
+  border-radius: var(--radius-sm);
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+.header-logout:hover {
+  color: var(--white);
+  border-color: var(--white);
+  background: rgba(255,255,255,.08);
+}
+
+/* ── Auth pages (login / denied) ─────────────────────────────────── */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cream);
+  padding: 2rem;
+}
+.auth-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--grey-200);
+  padding: 3rem 2.5rem;
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+}
+.auth-logo {
+  height: 48px;
+  margin-bottom: 1.25rem;
+}
+.auth-title {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 0.35rem;
+}
+.auth-subtitle {
+  font-size: 0.9rem;
+  color: var(--grey-500);
+  margin-bottom: 2rem;
+}
+.google-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 1.5rem;
+  background: var(--white);
+  color: var(--grey-700);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 500;
+  border: 1px solid var(--grey-300);
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  cursor: pointer;
+  transition: box-shadow var(--transition), border-color var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+.google-btn:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--grey-400);
+}
+.google-btn--secondary {
+  background: var(--blue);
+  color: var(--white);
+  border-color: var(--blue);
+}
+.google-btn--secondary:hover {
+  background: var(--blue-hover);
+  border-color: var(--blue-hover);
+}
+.google-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.auth-note {
+  font-size: 0.78rem;
+  color: var(--grey-400);
+  margin-top: 1.5rem;
+  line-height: 1.5;
+}

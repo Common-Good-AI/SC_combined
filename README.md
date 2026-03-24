@@ -158,7 +158,26 @@ All settings are read from environment variables (loaded from `.env` via `python
 | `TF_TOKEN` | Yes | Typeform personal access token |
 | `TF_FORM_IDS` | Yes | Comma-separated Typeform form IDs to ingest |
 | `TF_BASE_URL` | No | Typeform API base URL (default: `https://api.typeform.com`) |
+| `SECRET_KEY` | Yes | Flask session secret — generate with `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `GOOGLE_CLIENT_ID` | Yes | Google OAuth 2.0 client ID (see [Google SSO Setup](#google-sso-setup)) |
+| `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth 2.0 client secret |
+| `ALLOWED_EMAILS` | * | Comma-separated list of email addresses allowed to log in |
+| `ALLOWED_DOMAINS` | * | Comma-separated list of email domains allowed to log in (e.g. `example.com`) |
 | `FLASK_DEBUG` | No | Set to `1` to enable debug mode |
+
+\* At least one of `ALLOWED_EMAILS` or `ALLOWED_DOMAINS` must be set.
+
+### Google SSO Setup
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a project (or select an existing one).
+2. Navigate to **APIs & Services → Credentials**.
+3. Click **Create Credentials → OAuth client ID**.
+4. Choose **Web application** as the application type.
+5. Under **Authorised redirect URIs**, add:
+   - `http://localhost:8080/auth/callback` (local development)
+   - `https://<your-app>.herokuapp.com/auth/callback` (production)
+6. Copy the **Client ID** and **Client secret** into your `.env` file as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+7. Set `ALLOWED_EMAILS` and/or `ALLOWED_DOMAINS` to restrict which Google accounts can access the dashboard.
 
 ### Analytics-Specific Config (hardcoded in `config.py`)
 
