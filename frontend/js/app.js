@@ -40,7 +40,11 @@ const app = createApp({
       const meRes = await fetch('/api/me');
       if (meRes.ok) this.user = await meRes.json();
 
-      // Step 1: Fetch summary to get record counts
+      // Step 1: Wait for backend data to finish loading
+      this.loadStepLabel = 'Server is loading data…';
+      await this._waitForBackendReady();
+
+      // Step 2: Fetch summary to get record counts
       this.loadStepLabel = 'Connecting to server…';
       const summaryRes = await fetch('/api/data/summary');
       if (!summaryRes.ok) throw new Error('Server unavailable');
@@ -49,7 +53,7 @@ const app = createApp({
       this.totalRecords = Object.values(counts).reduce((s, n) => s + n, 0);
       this.loadProgress = 5;
 
-      // Step 2: Fetch each endpoint sequentially to show progress
+      // Step 3: Fetch each endpoint sequentially to show progress
       const stepSize = 95 / DATA_ENDPOINTS.length;
       for (let i = 0; i < DATA_ENDPOINTS.length; i++) {
         const ep = DATA_ENDPOINTS[i];
@@ -67,6 +71,28 @@ const app = createApp({
     } catch (e) {
       this.loadError = e.message || 'Failed to load data';
     }
+  },
+
+  methods: {
+    async _waitForBackendReady() {
+      // Poll /api/loading-status until data is loaded (or errored)
+      while (true) {
+        try {
+          const res = await fetch('/api/loading-status');
+          if (res.ok) {
+            const info = await res.json();
+            if (info.status === 'loaded') return;
+            if (info.status === 'error' || info.status === 'config_error') {
+              throw new Error('Server failed to load data. Check config.');
+            }
+            this.loadStepLabel = `Server is loading data… (${info.tables_loaded} tables ready)`;
+          }
+        } catch (e) {
+          if (e.message.includes('Server failed')) throw e;
+        }
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    },
   },
 });
 

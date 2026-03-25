@@ -83,7 +83,7 @@ def is_email_allowed(email: str) -> bool:
 
 
 # ── Authentication ───────────────────────────────────────────────────────
-_AUTH_EXEMPT = {"/login", "/login/google", "/auth/callback", "/api/health"}
+_AUTH_EXEMPT = {"/login", "/login/google", "/auth/callback", "/api/health", "/api/loading-status"}
 
 
 @app.before_request
@@ -97,18 +97,13 @@ def _require_login():
         return redirect(url_for("login"))
 
 
-# ── Startup hook ─────────────────────────────────────────────────────────
-_loaded = False
+# ── Background data loading ──────────────────────────────────────────────
+_load_started = False
+_load_lock = threading.Lock()
 
 
-@app.before_request
-def _lazy_load():
-    """Load data on the first request (not at import time)."""
-    global _loaded
-    if _loaded:
-        return
-    _loaded = True
-
+def _background_load() -> None:
+    """Load data in a background thread so requests are never blocked."""
     problems = Config.validate()
     if problems:
         log.warning("Config problems – data will NOT load:\n  • %s", "\n  • ".join(problems))
@@ -116,9 +111,7 @@ def _lazy_load():
         meta["errors"] = problems
         return
 
-    # Try loading cached data from disk first, then do an incremental
-    # refresh to pick up anything new.  Only fall back to a full refresh
-    # if no cache exists.
+    meta["status"] = "loading"
     try:
         if load_from_cache():
             log.info("Cache loaded – running incremental refresh …")
@@ -130,6 +123,19 @@ def _lazy_load():
         log.exception("Failed to load data on startup")
         meta["status"] = "error"
         meta["errors"].append(str(exc))
+
+
+@app.before_request
+def _trigger_load():
+    """Kick off background data load on the first request."""
+    global _load_started
+    if _load_started:
+        return
+    with _load_lock:
+        if _load_started:
+            return
+        _load_started = True
+    threading.Thread(target=_background_load, daemon=True).start()
 
 
 # ── Routes ───────────────────────────────────────────────────────────────
@@ -198,6 +204,16 @@ def health():
         "last_refresh": meta["last_refresh"],
         "errors": meta["errors"],
         "dataframes_loaded": list(store.keys()),
+    })
+
+
+@app.route("/api/loading-status")
+def loading_status():
+    """Lightweight endpoint the frontend polls while data is loading."""
+    return jsonify({
+        "status": meta["status"],
+        "tables_loaded": len(store),
+        "last_refresh": meta["last_refresh"],
     })
 
 
