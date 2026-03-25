@@ -11,6 +11,7 @@ from datetime import timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from authlib.integrations.flask_client import OAuth
 from flask import Flask, jsonify, redirect, request, send_from_directory, session, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from backend.config import Config
 from backend.data_store import get_summary, load_from_cache, meta, refresh_all, refresh_incremental, store
@@ -26,6 +27,7 @@ log = logging.getLogger(__name__)
 
 # ── App factory ──────────────────────────────────────────────────────────
 app = Flask(__name__, static_folder="frontend", static_url_path="/static")
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = Config.SECRET_KEY or "dev-fallback-key"
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 

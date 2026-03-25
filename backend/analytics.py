@@ -109,14 +109,14 @@ def _tf_emails(df: pd.DataFrame) -> pd.Series:
     return pd.Series(dtype=str)
 
 
-def _all_tf_frames() -> list[pd.DataFrame]:
-    """Return all Typeform DataFrames from the store."""
-    return [df for key, df in store.items() if key.startswith("tf_")]
-
-
 def _all_tf_frames_with_keys() -> list[tuple[str, pd.DataFrame]]:
     """Return (key, DataFrame) pairs for all Typeform DataFrames."""
     return [(key, df) for key, df in store.items() if key.startswith("tf_")]
+
+
+def _all_tf_frames() -> list[pd.DataFrame]:
+    """Return all Typeform DataFrames from the store."""
+    return [df for _, df in _all_tf_frames_with_keys()]
 
 
 def _get_confirmed_emails() -> set[str]:

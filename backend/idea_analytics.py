@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-# Race code → human-readable label
+# GoVocal race code → human-readable label
 _RACE_LABELS: dict[str, str] = {
     "white_9jz": "White",
     "black_or_african_american_v5c": "Black or African American",
@@ -36,10 +36,11 @@ _RACE_LABELS: dict[str, str] = {
     "asian_ib1": "Asian",
     "american_indian_or_alaska_native_unq": "American Indian or Alaska Native",
     "middle_eastern_or_north_african_mxd": "Middle Eastern or North African",
+    "native_hawaiian_or_pacific_islander_ujy": "Native Hawaiian or Pacific Islander",
     "prefer_not_to_say_jo5": "Prefer not to say",
 }
 
-# Political lean code → human-readable label
+# GoVocal political lean code → human-readable label
 _POLITICAL_LABELS: dict[str, str] = {
     "very_liberal_gp0": "Very Liberal",
     "somewhat_liberal_10r": "Liberal",
@@ -47,21 +48,6 @@ _POLITICAL_LABELS: dict[str, str] = {
     "somewhat_conservative_3bp": "Conservative",
     "very_conservative_iwv": "Very Conservative",
     "prefer_not_to_say_dgj": "Prefer not to say",
-}
-
-# Typeform political labels → canonical labels (align with GoVocal human-readable)
-_TF_POLITICAL_NORMALIZE: dict[str, str] = {
-    "Very Liberal": "Very Liberal",
-    "Liberal": "Liberal",
-    "Moderate": "Moderate",
-    "Conservative": "Conservative",
-    "Very Conservative": "Very Conservative",
-    "Not sure": "Not sure",
-}
-
-# Extra race codes that may appear (not in the main map but valid)
-_EXTRA_RACE_LABELS: dict[str, str] = {
-    "native_hawaiian_or_pacific_islander_ujy": "Native Hawaiian or Pacific Islander",
 }
 
 AGE_BUCKETS = [
@@ -190,37 +176,23 @@ def _age_bucket(raw: Any) -> str | None:
             return label
     if age < 18:
         return "Under 18"
-    return "65+"
+    return "70+"
 
 
 def _human_race(raw: Any) -> str | None:
-    """Convert a race code to a human-readable label (handles both GoVocal codes and plain strings)."""
+    """Convert a race code to a human-readable label, or return as-is if already readable."""
     val = _clean_val(raw)
     if val is None:
         return None
-    # Try GoVocal code lookup first
-    label = _RACE_LABELS.get(val) or _EXTRA_RACE_LABELS.get(val)
-    if label:
-        return label
-    # Already a human-readable label (e.g. from Typeform) — return as-is
-    return val
+    return _RACE_LABELS.get(val, val)
 
 
 def _human_political(raw: Any) -> str | None:
-    """Convert a political lean code to a human-readable label (handles both GoVocal codes and Typeform labels)."""
+    """Convert a political lean code to a human-readable label, or return as-is if already readable."""
     val = _clean_val(raw)
     if val is None:
         return None
-    # Try GoVocal code lookup first
-    label = _POLITICAL_LABELS.get(val)
-    if label:
-        return label
-    # Try Typeform label normalisation
-    label = _TF_POLITICAL_NORMALIZE.get(val)
-    if label:
-        return label
-    # Unknown — return as-is
-    return val
+    return _POLITICAL_LABELS.get(val, val)
 
 
 # ---------------------------------------------------------------------------
@@ -586,38 +558,58 @@ def invalidate_cache() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Reaction helpers
+# ---------------------------------------------------------------------------
+
+
+def _collect_reaction_demographics(reactions: pd.DataFrame) -> dict[str, list[str | None]]:
+    """Collect each voter's demographic values for a set of reactions.
+
+    Returns a dict mapping each demographic dimension to a list of values
+    (one per reaction, None if unknown).
+    """
+    _ensure_user_demo_cache()
+    demographics: dict[str, list[str | None]] = {dim: [] for dim in BRIDGING_DIMENSIONS}
+    for _, reaction in reactions.iterrows():
+        user_id = _clean_val(reaction.get("user_id"))
+        user_demo = _user_demo_cache.get(user_id, {}) if user_id else {}
+        for dim in BRIDGING_DIMENSIONS:
+            demographics[dim].append(user_demo.get(dim))
+    return demographics
+
+
+def _count_reactions_with_demographics(reactions: pd.DataFrame) -> int:
+    """Count reactions where the voter has at least one known demographic value."""
+    _ensure_user_demo_cache()
+    count = 0
+    for _, reaction in reactions.iterrows():
+        user_id = _clean_val(reaction.get("user_id"))
+        user_demo = _user_demo_cache.get(user_id, {}) if user_id else {}
+        if any(user_demo.get(dim) is not None for dim in BRIDGING_DIMENSIONS):
+            count += 1
+    return count
+
+
+# ---------------------------------------------------------------------------
 # Reaction demographic breakdown
 # ---------------------------------------------------------------------------
 
-def _reaction_demo_breakdown(reactions_df: pd.DataFrame) -> dict[str, Any]:
+
+def _reaction_demo_breakdown(reactions: pd.DataFrame) -> dict[str, Any]:
     """Compute upvote/downvote breakdown by each demographic dimension."""
-    _ensure_user_demo_cache()
+    upvotes = reactions[reactions["mode"] == "up"] if "mode" in reactions.columns else pd.DataFrame()
+    downvotes = reactions[reactions["mode"] == "down"] if "mode" in reactions.columns else pd.DataFrame()
 
-    up = reactions_df[reactions_df["mode"] == "up"] if "mode" in reactions_df.columns else pd.DataFrame()
-    down = reactions_df[reactions_df["mode"] == "down"] if "mode" in reactions_df.columns else pd.DataFrame()
+    upvote_demos = _collect_reaction_demographics(upvotes)
+    downvote_demos = _collect_reaction_demographics(downvotes)
 
-    def _demo_for_reactions(df: pd.DataFrame) -> dict[str, list[str | None]]:
-        demos: dict[str, list[str | None]] = {
-            "age_bucket": [], "race": [], "region": [], "urban_rural": [], "political_lean": [],
+    return {
+        dim: {
+            "upvotes": _bucket_counter(upvote_demos[dim]),
+            "downvotes": _bucket_counter(downvote_demos[dim]),
         }
-        for _, r in df.iterrows():
-            uid = _clean_val(r.get("user_id"))
-            d = _user_demo_cache.get(uid, {}) if uid else {}
-            for key in demos:
-                demos[key].append(d.get(key))
-        return demos
-
-    up_demos = _demo_for_reactions(up)
-    down_demos = _demo_for_reactions(down)
-
-    breakdown: dict[str, Any] = {}
-    for dim in ("age_bucket", "race", "political_lean", "region", "urban_rural"):
-        breakdown[dim] = {
-            "upvotes": _bucket_counter(up_demos[dim]),
-            "downvotes": _bucket_counter(down_demos[dim]),
-        }
-
-    return breakdown
+        for dim in BRIDGING_DIMENSIONS
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -774,39 +766,18 @@ def _compute_consensus_score(
         return result
 
     # Split into upvotes and downvotes
-    up = idea_reactions[idea_reactions["mode"] == "up"] if "mode" in idea_reactions.columns else pd.DataFrame()
-    down = idea_reactions[idea_reactions["mode"] == "down"] if "mode" in idea_reactions.columns else pd.DataFrame()
+    up_reactions = idea_reactions[idea_reactions["mode"] == "up"] if "mode" in idea_reactions.columns else pd.DataFrame()
+    down_reactions = idea_reactions[idea_reactions["mode"] == "down"] if "mode" in idea_reactions.columns else pd.DataFrame()
 
-    # Collect demographics for each reaction
-    def collect_demos(df: pd.DataFrame) -> dict[str, list[str | None]]:
-        demos: dict[str, list[str | None]] = {dim: [] for dim in BRIDGING_DIMENSIONS}
-        for _, r in df.iterrows():
-            uid = _clean_val(r.get("user_id"))
-            d = _user_demo_cache.get(uid, {}) if uid else {}
-            for dim in BRIDGING_DIMENSIONS:
-                demos[dim].append(d.get(dim))
-        return demos
+    up_demos = _collect_reaction_demographics(up_reactions)
+    down_demos = _collect_reaction_demographics(down_reactions)
 
-    up_demos = collect_demos(up)
-    down_demos = collect_demos(down)
-
-    # Approval: simple ratio of upvotes to total
-    approval_ratio = len(up) / total_votes if total_votes > 0 else 0.0
+    approval_ratio = len(up_reactions) / total_votes if total_votes > 0 else 0.0
     result["approval_ratio"] = round(approval_ratio, 4)
 
     # Count reactions with at least one known demographic value
-    def count_known_demo_reactions(df: pd.DataFrame) -> int:
-        count = 0
-        for _, r in df.iterrows():
-            uid = _clean_val(r.get("user_id"))
-            d = _user_demo_cache.get(uid, {}) if uid else {}
-            if any(d.get(dim) is not None for dim in BRIDGING_DIMENSIONS):
-                count += 1
-        return count
-
-    up_known = count_known_demo_reactions(up)
-    down_known = count_known_demo_reactions(down)
-    total_known = up_known + down_known
+    total_known = (_count_reactions_with_demographics(up_reactions)
+                   + _count_reactions_with_demographics(down_reactions))
 
     result["demographic_coverage"] = total_known / total_votes if total_votes > 0 else 0.0
 
@@ -905,32 +876,14 @@ def _compute_consensus_score_wmga(
     if idea_reactions.empty or total_votes == 0:
         return result
 
-    up = idea_reactions[idea_reactions["mode"] == "up"] if "mode" in idea_reactions.columns else pd.DataFrame()
-    down = idea_reactions[idea_reactions["mode"] == "down"] if "mode" in idea_reactions.columns else pd.DataFrame()
+    up_reactions = idea_reactions[idea_reactions["mode"] == "up"] if "mode" in idea_reactions.columns else pd.DataFrame()
+    down_reactions = idea_reactions[idea_reactions["mode"] == "down"] if "mode" in idea_reactions.columns else pd.DataFrame()
 
-    def collect_demos(df: pd.DataFrame) -> dict[str, list[str | None]]:
-        demos: dict[str, list[str | None]] = {dim: [] for dim in BRIDGING_DIMENSIONS}
-        for _, r in df.iterrows():
-            uid = _clean_val(r.get("user_id"))
-            d = _user_demo_cache.get(uid, {}) if uid else {}
-            for dim in BRIDGING_DIMENSIONS:
-                demos[dim].append(d.get(dim))
-        return demos
+    up_demos = _collect_reaction_demographics(up_reactions)
+    down_demos = _collect_reaction_demographics(down_reactions)
 
-    up_demos = collect_demos(up)
-    down_demos = collect_demos(down)
-
-    # Count reactions with at least one known demographic value
-    def count_known(df: pd.DataFrame) -> int:
-        count = 0
-        for _, r in df.iterrows():
-            uid = _clean_val(r.get("user_id"))
-            d = _user_demo_cache.get(uid, {}) if uid else {}
-            if any(d.get(dim) is not None for dim in BRIDGING_DIMENSIONS):
-                count += 1
-        return count
-
-    total_known = count_known(up) + count_known(down)
+    total_known = (_count_reactions_with_demographics(up_reactions)
+                   + _count_reactions_with_demographics(down_reactions))
     if total_known < BRIDGING_MIN_KNOWN_DEMO_REACTIONS:
         return result
 
