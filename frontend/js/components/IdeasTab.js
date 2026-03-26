@@ -67,6 +67,10 @@ const IdeasTab = {
               <option value="jsd">JSD (Diversity)</option>
               <option value="wmga">WMGA (Group Approval)</option>
             </select>
+            <label style="font-size:0.82rem; color:#94a3b8; margin-left:8px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+              <input type="checkbox" v-model="polarizationPenalty" style="cursor:pointer;">
+              Polarization Penalty
+            </label>
           </div>
           <button class="export-btn" @click="exportCSV" title="Download top 100 ideas as CSV">
             &#x2B07; Export CSV
@@ -147,6 +151,7 @@ const IdeasTab = {
           v-if="selectedIdeaId"
           :idea-id="selectedIdeaId"
           :scoring-method="scoringMethod"
+          :polarization-penalty="polarizationPenalty"
           @close="selectedIdeaId = null"
         ></idea-detail>
 
@@ -165,6 +170,7 @@ const IdeasTab = {
       sortKey: 'bridging',
       sortDesc: true,
       scoringMethod: 'jsd',
+      polarizationPenalty: true,
       currentPage: 1,
       pageSize: 25,
       tooltip: { visible: false, text: '', x: 0, y: 0 },
@@ -198,7 +204,9 @@ const IdeasTab = {
           vb = totalB > 0 ? b.reactions.upvotes / totalB : -1;
         } else {
           // bridging — use selected scoring method
-          const scoreKey = this.scoringMethod === 'wmga' ? 'wmga_score' : 'consensus_score';
+          const scoreKey = this.scoringMethod === 'wmga'
+            ? (this.polarizationPenalty ? 'wmga_score' : 'wmga_score_no_penalty')
+            : (this.polarizationPenalty ? 'consensus_score' : 'consensus_score_no_penalty');
           va = (a.bridging && a.bridging[scoreKey] != null) ? a.bridging[scoreKey] : -1;
           vb = (b.bridging && b.bridging[scoreKey] != null) ? b.bridging[scoreKey] : -1;
         }
@@ -298,14 +306,20 @@ const IdeasTab = {
 
     bridgingLabel(idea) {
       if (!idea.bridging) return 'N/A';
-      const score = this.scoringMethod === 'wmga' ? idea.bridging.wmga_score : idea.bridging.consensus_score;
+      const scoreKey = this.scoringMethod === 'wmga'
+        ? (this.polarizationPenalty ? 'wmga_score' : 'wmga_score_no_penalty')
+        : (this.polarizationPenalty ? 'consensus_score' : 'consensus_score_no_penalty');
+      const score = idea.bridging[scoreKey];
       if (score == null) return 'N/A';
       return score.toFixed(1);
     },
 
     bridgingClass(idea) {
       if (!idea.bridging) return 'bridging-badge bridging-na';
-      const s = this.scoringMethod === 'wmga' ? idea.bridging.wmga_score : idea.bridging.consensus_score;
+      const scoreKey = this.scoringMethod === 'wmga'
+        ? (this.polarizationPenalty ? 'wmga_score' : 'wmga_score_no_penalty')
+        : (this.polarizationPenalty ? 'consensus_score' : 'consensus_score_no_penalty');
+      const s = idea.bridging[scoreKey];
       if (s == null) return 'bridging-badge bridging-na';
       if (s >= 70) return 'bridging-badge bridging-high';
       if (s >= 45) return 'bridging-badge bridging-med';

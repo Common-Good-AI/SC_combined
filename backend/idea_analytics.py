@@ -883,14 +883,19 @@ def _compute_consensus_score(
     result["polarization_penalty"] = round(weighted_polarization, 4)
 
     # Diversity: weighted average of per-dimension scores × polarization penalty
-    diversity = sum(
+    weighted_dim_avg = sum(
         effective_weights[dim] * per_dim_scores[dim]
         for dim in BRIDGING_DIMENSIONS
-    ) * polarization_factor
+    )
+    diversity = weighted_dim_avg * polarization_factor
 
     # Final score: Approval × Diversity × Confidence × 100
     consensus_score = approval_ratio * diversity * confidence * 100
     result["consensus_score"] = round(consensus_score, 2)
+
+    # Score without polarization penalty (for frontend toggle)
+    consensus_score_no_penalty = approval_ratio * weighted_dim_avg * confidence * 100
+    result["consensus_score_no_penalty"] = round(consensus_score_no_penalty, 2)
 
     # Confidence level
     if total_known >= BRIDGING_FULL_CONFIDENCE_REACTIONS and total_votes >= 20:
@@ -992,13 +997,19 @@ def _compute_consensus_score_wmga(
         per_dim_penalized[dim] = per_dim[dim] * penalty
 
     result["wmga_per_dimension"] = {dim: round(s, 4) for dim, s in per_dim_penalized.items()}
+    result["wmga_per_dimension_no_penalty"] = {dim: round(s, 4) for dim, s in per_dim.items()}
     result["wmga_polarization_scores"] = {dim: round(s, 4) for dim, s in polarization_scores.items()}
     result["wmga_polarization_penalty"] = round(weighted_polarization, 4)
 
-    wmga_score = sum(
+    weighted_dim_avg = sum(
         effective_weights[dim] * per_dim[dim] for dim in BRIDGING_DIMENSIONS
-    ) * polarization_factor * confidence * 100
+    )
+    wmga_score = weighted_dim_avg * polarization_factor * confidence * 100
     result["wmga_score"] = round(wmga_score, 2)
+
+    # Score without polarization penalty (for frontend toggle)
+    wmga_score_no_penalty = weighted_dim_avg * confidence * 100
+    result["wmga_score_no_penalty"] = round(wmga_score_no_penalty, 2)
 
     return result
 

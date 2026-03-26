@@ -2,6 +2,7 @@ const IdeaDetail = {
   props: {
     ideaId: { type: String, required: true },
     scoringMethod: { type: String, default: 'jsd' },
+    polarizationPenalty: { type: Boolean, default: true },
   },
   emits: ['close'],
   template: `
@@ -172,7 +173,10 @@ const IdeaDetail = {
   computed: {
     activeScore() {
       if (!this.idea || !this.idea.bridging) return null;
-      return this.scoringMethod === 'wmga' ? this.idea.bridging.wmga_score : this.idea.bridging.consensus_score;
+      if (this.scoringMethod === 'wmga') {
+        return this.polarizationPenalty ? this.idea.bridging.wmga_score : this.idea.bridging.wmga_score_no_penalty;
+      }
+      return this.polarizationPenalty ? this.idea.bridging.consensus_score : this.idea.bridging.consensus_score_no_penalty;
     },
     bridgingLabel() {
       const s = this.activeScore;
@@ -189,7 +193,9 @@ const IdeaDetail = {
     activeDimensionScores() {
       if (!this.idea || !this.idea.bridging) return {};
       if (this.scoringMethod === 'wmga') {
-        return this.idea.bridging.wmga_per_dimension || {};
+        return this.polarizationPenalty
+          ? (this.idea.bridging.wmga_per_dimension || {})
+          : (this.idea.bridging.wmga_per_dimension_no_penalty || {});
       }
       return this.idea.bridging.per_dimension_scores || {};
     },
