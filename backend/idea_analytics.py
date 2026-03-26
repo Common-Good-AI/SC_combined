@@ -540,6 +540,66 @@ def get_population_demographics() -> dict[str, Any]:
     }
 
 
+def compute_demographic_coverage() -> dict[str, Any]:
+    """Compute the percentage of unique users with demographic data per action type.
+
+    Returns a list of rows, each with:
+      - action: human-readable action label
+      - total_users: number of unique users who performed the action
+      - users_with_demo: number with at least one demographic attribute
+      - coverage_pct: percentage with demographic data
+    """
+    _ensure_user_demo_cache()
+    _build_email_demo_cache()
+    _build_userid_email_map()
+
+    rows: list[dict[str, Any]] = []
+
+    def _has_demo(user_id: str | None) -> bool:
+        if not user_id:
+            return False
+        demo = _user_demo_cache.get(user_id, {})
+        return any(demo.get(dim) is not None for dim in BRIDGING_DIMENSIONS)
+
+    # 1. Idea authors
+    ideas_df = store.get("gv_ideas_ideation", pd.DataFrame())
+    if not ideas_df.empty and "author_id" in ideas_df.columns:
+        author_ids = set(ideas_df["author_id"].dropna().unique())
+        with_demo = sum(1 for uid in author_ids if _has_demo(uid))
+        rows.append({
+            "action": "Added an idea",
+            "total_users": len(author_ids),
+            "users_with_demo": with_demo,
+            "coverage_pct": round(with_demo / len(author_ids) * 100, 1) if author_ids else 0,
+        })
+
+    # 2. Reaction voters
+    reactions_df = store.get("gv_reactions", pd.DataFrame())
+    if not reactions_df.empty and "user_id" in reactions_df.columns:
+        voter_ids = set(reactions_df["user_id"].dropna().unique())
+        with_demo = sum(1 for uid in voter_ids if _has_demo(uid))
+        rows.append({
+            "action": "Added a reaction",
+            "total_users": len(voter_ids),
+            "users_with_demo": with_demo,
+            "coverage_pct": round(with_demo / len(voter_ids) * 100, 1) if voter_ids else 0,
+        })
+
+    # 3. Comment authors
+    comments_df = store.get("gv_comments", pd.DataFrame())
+    if not comments_df.empty and "author_id" in comments_df.columns:
+        commenter_ids = set(comments_df["author_id"].dropna().unique())
+        with_demo = sum(1 for uid in commenter_ids if _has_demo(uid))
+        rows.append({
+            "action": "Added a comment",
+            "total_users": len(commenter_ids),
+            "users_with_demo": with_demo,
+            "coverage_pct": round(with_demo / len(commenter_ids) * 100, 1) if commenter_ids else 0,
+        })
+
+    return {"coverage": rows}
+
+
 def invalidate_cache() -> None:
     """Clear cached lookups (call after data refresh)."""
     global _user_demo_cache, _email_demo_cache, _userid_email_map, _ZIPCODE_GEO, _ZIPCODE_GEO_LOADED

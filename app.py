@@ -294,6 +294,12 @@ def analytics_actions():
     return jsonify(analytics.compute_total_actions())
 
 
+@app.route("/api/analytics/action-distributions")
+def analytics_action_distributions():
+    """Per-user action count distributions (percentile curves)."""
+    return jsonify(analytics.compute_action_distributions())
+
+
 @app.route("/api/analytics/conversion")
 def analytics_conversion():
     """Survey → deliberation conversion rate."""
@@ -383,6 +389,11 @@ def analytics_participation_rate():
 def analytics_demographics_baseline():
     """Demographic distribution of all voters — used as JSD baseline."""
     return jsonify(idea_analytics.get_population_demographics())
+
+@app.route("/api/analytics/demographic-coverage")
+def analytics_demographic_coverage():
+    """Percentage of users with demographic data per action type."""
+    return jsonify(idea_analytics.compute_demographic_coverage())
 
 @app.route("/api/debug/scoring")
 def debug_scoring():

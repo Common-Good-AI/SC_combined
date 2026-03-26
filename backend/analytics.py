@@ -21,6 +21,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from backend.api_client.gv_api import GoVocalClient
@@ -255,6 +256,9 @@ def compute_total_actions() -> dict[str, Any]:
     # Reactions
     reactions = len(store.get("gv_reactions", pd.DataFrame()))
 
+    # Comments
+    comments = len(store.get("gv_comments", pd.DataFrame()))
+
     return {
         "survey_submits": survey_submits,
         "survey_submits_breakdown": {
@@ -263,7 +267,49 @@ def compute_total_actions() -> dict[str, Any]:
         },
         "ideas_submitted": ideas_submitted,
         "reactions": reactions,
+        "comments": comments,
         "total": survey_submits + ideas_submitted + reactions,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 2b. Action distributions (per-user percentile curves)
+# ---------------------------------------------------------------------------
+
+def _user_action_distribution(df: pd.DataFrame, user_col: str) -> dict:
+    """Return percentile-based distribution of per-user action counts."""
+    if df.empty or user_col not in df.columns:
+        return {"percentiles": [], "counts": [], "total_users": 0,
+                "max_actions": 0, "median_actions": 0, "mean_actions": 0}
+
+    per_user = np.array(df.groupby(user_col).size().sort_values().values)
+    n = len(per_user)
+    percentiles = list(range(0, 101))
+    counts = []
+    for p in percentiles:
+        idx = int(np.clip(np.floor(p / 100 * (n - 1)), 0, n - 1))
+        counts.append(int(per_user[idx]))
+
+    return {
+        "percentiles": percentiles,
+        "counts": counts,
+        "total_users": n,
+        "max_actions": int(per_user[-1]) if n else 0,
+        "median_actions": int(np.median(per_user)) if n else 0,
+        "mean_actions": round(float(np.mean(per_user)), 1) if n else 0,
+    }
+
+
+def compute_action_distributions() -> dict[str, Any]:
+    """Per-user action count distributions for reactions, ideas, and comments."""
+    reactions_df = store.get("gv_reactions", pd.DataFrame())
+    ideas_df = store.get("gv_ideas_ideation", pd.DataFrame())
+    comments_df = store.get("gv_comments", pd.DataFrame())
+
+    return {
+        "reactions": _user_action_distribution(reactions_df, "user_id"),
+        "ideas": _user_action_distribution(ideas_df, "author_id"),
+        "comments": _user_action_distribution(comments_df, "author_id"),
     }
 
 

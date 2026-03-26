@@ -35,6 +35,10 @@ const ParticipationTab = {
             <div class="label">Reactions</div>
             <div class="value">{{ fmt(actions.reactions) }}</div>
           </div>
+          <div class="card">
+            <div class="label">Comments</div>
+            <div class="value">{{ fmt(actions.comments) }}</div>
+          </div>
         </div>
 
         <!-- GoVocal Participation Rate cards -->
@@ -125,34 +129,40 @@ const ParticipationTab = {
           </div>
         </div>
 
-        <!-- Demographic Baseline Breakdown -->
-        <div class="chart-container" v-if="demographics && demographics.dimensions">
-          <h3>Platform Demographic Baseline <span style="font-size:.75em;color:#64748b;font-weight:normal">(all voters)</span></h3>
-          <p style="color:#64748b;font-size:.85em;margin:-.25em 0 1em">
-            Distribution of demographics across {{ fmt(demographics.total_voters) }} voters who reacted to ideas.
-            This baseline is used to compute consensus (bridging) scores.
-          </p>
-          <div class="demo-grid">
-            <template v-for="dim in demoOrder" :key="dim">
-              <div class="demo-card" v-if="demographics.dimensions[dim]">
-                <h4>{{ dimLabel(dim) }}</h4>
-                <div class="demo-known-info">
-                  {{ fmt(demographics.dimensions[dim].total_known) }} known ·
-                  {{ fmt(demographics.dimensions[dim].total_unknown) }} unknown
-                </div>
-                <div class="demo-bar-list">
-                  <div class="demo-bar-row" v-for="(pct, cat) in demographics.dimensions[dim].distribution" :key="cat">
-                    <div class="demo-bar-label">{{ cat }}</div>
-                    <div class="demo-bar-track">
-                      <div class="demo-bar-fill" :style="{ width: (pct * 100) + '%', backgroundColor: dimColor(dim) }"></div>
-                    </div>
-                    <div class="demo-bar-value">{{ (pct * 100).toFixed(1) }}%
-                      <span class="demo-bar-count">({{ fmt(demographics.dimensions[dim].counts[cat]) }})</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </template>
+        <!-- Action distribution charts -->
+        <div class="card-row" v-if="actionDistributions" style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem">
+          <div class="chart-container" style="margin:0">
+            <h3>Reactions Distribution</h3>
+            <p style="color:#64748b;font-size:.82em;margin:-.25em 0 .75em">
+              {{ fmt(actionDistributions.reactions.total_users) }} users ·
+              median {{ fmt(actionDistributions.reactions.median_actions) }} ·
+              mean {{ actionDistributions.reactions.mean_actions }}
+            </p>
+            <div class="chart-wrap" style="height:240px">
+              <canvas ref="reactionsDistChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-container" style="margin:0">
+            <h3>Ideas Distribution</h3>
+            <p style="color:#64748b;font-size:.82em;margin:-.25em 0 .75em">
+              {{ fmt(actionDistributions.ideas.total_users) }} users ·
+              median {{ fmt(actionDistributions.ideas.median_actions) }} ·
+              mean {{ actionDistributions.ideas.mean_actions }}
+            </p>
+            <div class="chart-wrap" style="height:240px">
+              <canvas ref="ideasDistChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-container" style="margin:0">
+            <h3>Comments Distribution</h3>
+            <p style="color:#64748b;font-size:.82em;margin:-.25em 0 .75em">
+              {{ fmt(actionDistributions.comments.total_users) }} users ·
+              median {{ fmt(actionDistributions.comments.median_actions) }} ·
+              mean {{ actionDistributions.comments.mean_actions }}
+            </p>
+            <div class="chart-wrap" style="height:240px">
+              <canvas ref="commentsDistChart"></canvas>
+            </div>
           </div>
         </div>
 
@@ -171,6 +181,7 @@ const ParticipationTab = {
       visits: [],
       participationRate: {},
       demographics: {},
+      actionDistributions: { reactions: {}, ideas: {}, comments: {} },
       chartMode: 'cumulative',
       sourceMode: 'cumulative',
       dateFrom: '',
@@ -178,6 +189,9 @@ const ParticipationTab = {
       _timelineChart: null,
       _sourceChart: null,
       _categoryChart: null,
+      _reactionsDistChart: null,
+      _ideasDistChart: null,
+      _commentsDistChart: null,
     };
   },
 
@@ -244,6 +258,7 @@ const ParticipationTab = {
       this.visits            = vData.visits || [];
       this.participationRate = this.preloaded.participationRate || {};
       this.demographics      = this.preloaded.demographics || {};
+      this.actionDistributions = this.preloaded.actionDistributions || { reactions: {}, ideas: {}, comments: {} };
 
       // Default date range to full span of BOTH timelines so participants
       // whose first-seen date predates the first recorded action are included.
@@ -261,6 +276,7 @@ const ParticipationTab = {
         this.renderTimelineChart();
         this.renderSourceChart();
         this.renderCategoryChart();
+        this.renderDistributionCharts();
       });
     } catch (e) {
       this.error = 'Failed to load participation data.';
@@ -272,6 +288,9 @@ const ParticipationTab = {
     if (this._timelineChart) this._timelineChart.destroy();
     if (this._sourceChart)   this._sourceChart.destroy();
     if (this._categoryChart) this._categoryChart.destroy();
+    if (this._reactionsDistChart) this._reactionsDistChart.destroy();
+    if (this._ideasDistChart)     this._ideasDistChart.destroy();
+    if (this._commentsDistChart)  this._commentsDistChart.destroy();
   },
 
   methods: {
@@ -555,6 +574,81 @@ const ParticipationTab = {
           },
         },
       });
+    },
+
+    renderDistributionCharts() {
+      const configs = [
+        { ref: 'reactionsDistChart', key: '_reactionsDistChart', data: this.actionDistributions.reactions, color: '#d97706', label: 'Reactions' },
+        { ref: 'ideasDistChart',     key: '_ideasDistChart',     data: this.actionDistributions.ideas,     color: '#059669', label: 'Ideas' },
+        { ref: 'commentsDistChart',  key: '_commentsDistChart',  data: this.actionDistributions.comments,  color: '#0564B8', label: 'Comments' },
+      ];
+      for (const cfg of configs) {
+        const ctx = this.$refs[cfg.ref];
+        if (!ctx) continue;
+        if (this[cfg.key]) { this[cfg.key].destroy(); this[cfg.key] = null; }
+        const dist = cfg.data;
+        if (!dist || !dist.percentiles || !dist.percentiles.length) continue;
+
+        this[cfg.key] = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: dist.percentiles.map(p => p + '%'),
+            datasets: [{
+              label: cfg.label + ' per user',
+              data: dist.counts,
+              borderColor: cfg.color,
+              backgroundColor: cfg.color + '18',
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              tension: 0.3,
+              fill: 'origin',
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            scales: {
+              x: {
+                title: { display: true, text: 'User Percentile', color: '#64748b', font: { size: 11 } },
+                grid: { display: false },
+                ticks: {
+                  maxTicksLimit: 6,
+                  color: '#94a3b8',
+                  font: { size: 10 },
+                  callback: function(val, idx) {
+                    const label = this.getLabelForValue(idx);
+                    return ['0%','20%','40%','60%','80%','100%'].includes(label) ? label : '';
+                  },
+                },
+                border: { display: false },
+              },
+              y: {
+                title: { display: true, text: '# of Actions', color: '#64748b', font: { size: 11 } },
+                beginAtZero: true,
+                ticks: { precision: 0, color: '#94a3b8', font: { size: 10 } },
+                grid: { color: 'rgba(0,0,0,.04)' },
+                border: { display: false },
+              },
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: '#003366',
+                titleColor: '#C2DFED',
+                bodyColor: '#C2DFED',
+                padding: 8,
+                cornerRadius: 6,
+                callbacks: {
+                  title: (items) => 'Percentile: ' + items[0].label,
+                  label: (item) => item.parsed.y + ' ' + cfg.label.toLowerCase(),
+                },
+              },
+            },
+          },
+        });
+      }
     },
 
     renderCategoryChart() {

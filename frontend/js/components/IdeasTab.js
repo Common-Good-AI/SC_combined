@@ -15,6 +15,38 @@ const IdeasTab = {
           {{ tooltip.text }}
         </div>
 
+        <!-- Demographic coverage rates -->
+        <div v-if="demoCoverage.length" class="demo-coverage-container" style="margin-bottom:24px;">
+          <h3 class="section-title">Demographic Data Coverage</h3>
+          <p style="color:#94a3b8; font-size:0.85rem; margin-bottom:8px;">
+            Percentage of unique users per action type for whom we have demographic data.
+          </p>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Action</th>
+                  <th style="width:130px">Total Users</th>
+                  <th style="width:170px">Users with Demographics</th>
+                  <th style="width:130px">Coverage</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in demoCoverage" :key="row.action">
+                  <td>{{ row.action }}</td>
+                  <td>{{ row.total_users.toLocaleString() }}</td>
+                  <td>{{ row.users_with_demo.toLocaleString() }}</td>
+                  <td>
+                    <span :class="coverageClass(row.coverage_pct)">
+                      {{ row.coverage_pct }}%
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- Popular themes from surveys -->
         <div class="themes-chart-container">
           <h3>Most Popular Themes from Surveys</h3>
@@ -128,6 +160,7 @@ const IdeasTab = {
       error: null,
       ideas: [],
       themes: {},
+      demoCoverage: [],
       selectedIdeaId: null,
       sortKey: 'bridging',
       sortDesc: true,
@@ -192,6 +225,7 @@ const IdeasTab = {
       // Use preloaded data from the app loading screen
       this.ideas = this.preloaded.ideas || [];
       this.themes = this.preloaded.themes || {};
+      this.demoCoverage = (this.preloaded.demoCoverage && this.preloaded.demoCoverage.coverage) || [];
       this.loading = false;
 
       this.$nextTick(() => {
@@ -245,6 +279,12 @@ const IdeasTab = {
       const total = idea.reactions.upvotes + idea.reactions.downvotes;
       if (total === 0) return 'N/A';
       return ((idea.reactions.upvotes / total) * 100).toFixed(0) + '%';
+    },
+
+    coverageClass(pct) {
+      if (pct >= 70) return 'bridging-badge bridging-high';
+      if (pct >= 40) return 'bridging-badge bridging-med';
+      return 'bridging-badge bridging-low';
     },
 
     approvalClass(idea) {
