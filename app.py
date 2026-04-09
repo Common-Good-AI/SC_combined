@@ -17,6 +17,7 @@ from backend.config import Config
 from backend.data_store import get_summary, load_from_cache, meta, refresh_all, refresh_incremental, store
 from backend import analytics
 from backend import idea_analytics
+from backend import voting_analytics
 
 # ── Logging ──────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -394,6 +395,36 @@ def analytics_demographics_baseline():
 def analytics_demographic_coverage():
     """Percentage of users with demographic data per action type."""
     return jsonify(idea_analytics.compute_demographic_coverage())
+
+
+# ── Voting analytics routes ──────────────────────────────────────────────
+
+
+@app.route("/api/analytics/voting")
+def analytics_voting():
+    """Issue vote percentages for the voting phase."""
+    return jsonify(voting_analytics.compute_voting_results())
+
+
+@app.route("/api/analytics/voting/top-x")
+def analytics_voting_top_x():
+    """Coverage: what % of voters have at least Y votes in top X issues."""
+    try:
+        x = max(1, int(request.args.get("x", "6")))
+    except (ValueError, TypeError):
+        x = 6
+    try:
+        y = max(1, int(request.args.get("y", "1")))
+    except (ValueError, TypeError):
+        y = 1
+    return jsonify(voting_analytics.compute_top_x_coverage(x, min_votes=y))
+
+
+@app.route("/api/analytics/voting/demographics")
+def analytics_voting_demographics():
+    """Demographic breakdown of voters in the voting phase."""
+    return jsonify(voting_analytics.compute_voter_demographics())
+
 
 @app.route("/api/debug/scoring")
 def debug_scoring():

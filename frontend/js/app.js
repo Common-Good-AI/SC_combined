@@ -14,6 +14,7 @@ const DATA_ENDPOINTS = [
   { key: 'themes',             url: '/api/analytics/idea-selections',           label: 'Survey themes' },
   { key: 'tags',               url: '/api/analytics/idea-tags',                 label: 'Idea tags' },
   { key: 'votesByTag',         url: '/api/analytics/votes-by-tag',              label: 'Votes by tag' },
+  { key: 'voting',              url: '/api/analytics/voting',                    label: 'Voting results' },
 ];
 
 const app = createApp({
@@ -102,6 +103,7 @@ const app = createApp({
 app.component('summary-tab', SummaryTab);
 app.component('participation-tab', ParticipationTab);
 app.component('ideas-tab', IdeasTab);
+app.component('voting-tab', VotingTab);
 app.component('idea-detail', IdeaDetail);
 
 app.mount('#app');
