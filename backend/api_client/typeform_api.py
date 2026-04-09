@@ -58,20 +58,14 @@ class TypeformClient:
 
     # ── Responses (with cursor pagination) ───────────────────────────────
 
-    def get_responses_raw(
+    def _paginate_responses(
         self,
         form_id: str,
-        since: str | None = None,
+        params: dict[str, Any],
     ) -> list[dict[str, Any]]:
-        """Return the raw ``items`` list for *form_id*, paginated.
-
-        If *since* is given (ISO 8601), only responses submitted after that
-        timestamp are returned.
-        """
+        """Paginate through all response pages for the given *params*."""
         all_items: list[dict[str, Any]] = []
-        params: dict[str, Any] = {"page_size": _PAGE_SIZE}
-        if since:
-            params["since"] = since
+        params = {**params, "page_size": _PAGE_SIZE}
 
         while True:
             body = self._request(f"/forms/{form_id}/responses", params=params)
@@ -88,7 +82,37 @@ class TypeformClient:
                 break
             params["after"] = last_token
 
-        log.info("Typeform: form %s → %d responses", form_id, len(all_items))
+        return all_items
+
+    def get_responses_raw(
+        self,
+        form_id: str,
+        since: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return the raw ``items`` list for *form_id*, paginated.
+
+        Fetches both completed and partial (incomplete) submissions.
+        If *since* is given (ISO 8601), only responses submitted after that
+        timestamp are returned.
+        """
+        base_params: dict[str, Any] = {}
+        if since:
+            base_params["since"] = since
+
+        # Fetch completed responses
+        completed_items = self._paginate_responses(
+            form_id, {**base_params, "completed": "true"},
+        )
+        log.info("Typeform: form %s → %d completed responses", form_id, len(completed_items))
+
+        # Fetch partial (incomplete) responses
+        partial_items = self._paginate_responses(
+            form_id, {**base_params, "completed": "false"},
+        )
+        log.info("Typeform: form %s → %d partial responses", form_id, len(partial_items))
+
+        all_items = completed_items + partial_items
+        log.info("Typeform: form %s → %d total responses", form_id, len(all_items))
         return all_items
 
     # ── Flattened responses ──────────────────────────────────────────────
@@ -126,6 +150,7 @@ class TypeformClient:
                 "response_id": item.get("response_id") or item.get("token", ""),
                 "submitted_at": item.get("submitted_at"),
                 "landed_at": item.get("landed_at"),
+                "response_type": "completed" if item.get("submitted_at") else "partial",
                 "form_id": form_id,
             }
 

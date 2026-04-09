@@ -218,6 +218,28 @@ class GoVocalClient:
         """Fetch the many-to-many join table between ideas and input topics."""
         return self._request("/api/v2/ideas_input_topics")
 
+    # ── Voting (baskets) ─────────────────────────────────────────────────
+
+    def get_baskets(self, updated_after: str | None = None) -> list[dict]:
+        """Fetch all voting baskets (one per user per voting phase)."""
+        params: dict[str, Any] = {}
+        if updated_after:
+            params["updated_after"] = updated_after
+        return self._request("/api/v2/baskets", params=params)
+
+    def get_basket_ideas(self, updated_after: str | None = None) -> list[dict]:
+        """Fetch basket↔idea associations (which ideas each user voted for)."""
+        params: dict[str, Any] = {}
+        if updated_after:
+            params["updated_after"] = updated_after
+        return self._request("/api/v2/basket_ideas", params=params)
+
+    def get_basket_count(self) -> int:
+        return self.get_resource_count("/api/v2/baskets")
+
+    def get_basket_idea_count(self) -> int:
+        return self.get_resource_count("/api/v2/basket_ideas")
+
     # ── Simple GET (no pagination) ───────────────────────────────────────
 
     def _get_json(

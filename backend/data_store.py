@@ -178,6 +178,32 @@ def _ingest_govocal(gv: GoVocalClient) -> dict[str, pd.DataFrame]:
         log.error(msg)
         errors.append(msg)
 
+    # --- Baskets (voting) ---
+    try:
+        baskets_raw = gv.get_baskets()
+        if baskets_raw:
+            frames["gv_baskets"] = pd.json_normalize(baskets_raw)
+            log.info("GoVocal: %d baskets loaded", len(baskets_raw))
+        else:
+            frames["gv_baskets"] = pd.DataFrame()
+    except Exception as exc:
+        msg = f"GoVocal baskets error: {exc}"
+        log.error(msg)
+        errors.append(msg)
+
+    # --- Basket ↔ idea associations (votes) ---
+    try:
+        basket_ideas_raw = gv.get_basket_ideas()
+        if basket_ideas_raw:
+            frames["gv_basket_ideas"] = pd.json_normalize(basket_ideas_raw)
+            log.info("GoVocal: %d basket-idea associations loaded", len(basket_ideas_raw))
+        else:
+            frames["gv_basket_ideas"] = pd.DataFrame()
+    except Exception as exc:
+        msg = f"GoVocal basket-idea associations error: {exc}"
+        log.error(msg)
+        errors.append(msg)
+
     if errors:
         meta["errors"].extend(errors)
 
@@ -561,6 +587,36 @@ def _ingest_govocal_incremental(gv: GoVocalClient) -> None:
     except Exception as exc:
         errors.append(f"GoVocal idea-topic associations error: {exc}")
         log.error("GoVocal idea-topic associations error: %s", exc)
+
+    # --- Baskets (voting) ---
+    try:
+        api_count = gv.get_basket_count()
+        cached_count = len(store.get("gv_baskets", pd.DataFrame()))
+        if not _last_fetch.get("gv_baskets") or api_count != cached_count:
+            log.info("GoVocal baskets: API %d vs cached %d – fetching", api_count, cached_count)
+            baskets_raw = gv.get_baskets()
+            store["gv_baskets"] = pd.json_normalize(baskets_raw) if baskets_raw else pd.DataFrame()
+        else:
+            log.info("GoVocal baskets: count unchanged (%d) – skipping", cached_count)
+        _last_fetch["gv_baskets"] = now
+    except Exception as exc:
+        errors.append(f"GoVocal baskets incremental error: {exc}")
+        log.error("GoVocal baskets incremental error: %s", exc)
+
+    # --- Basket ↔ idea associations ---
+    try:
+        api_count = gv.get_basket_idea_count()
+        cached_count = len(store.get("gv_basket_ideas", pd.DataFrame()))
+        if not _last_fetch.get("gv_basket_ideas") or api_count != cached_count:
+            log.info("GoVocal basket-ideas: API %d vs cached %d – fetching", api_count, cached_count)
+            basket_ideas_raw = gv.get_basket_ideas()
+            store["gv_basket_ideas"] = pd.json_normalize(basket_ideas_raw) if basket_ideas_raw else pd.DataFrame()
+        else:
+            log.info("GoVocal basket-ideas: count unchanged (%d) – skipping", cached_count)
+        _last_fetch["gv_basket_ideas"] = now
+    except Exception as exc:
+        errors.append(f"GoVocal basket-ideas incremental error: {exc}")
+        log.error("GoVocal basket-ideas incremental error: %s", exc)
 
     if errors:
         meta["errors"].extend(errors)

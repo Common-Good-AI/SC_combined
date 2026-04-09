@@ -1036,24 +1036,58 @@ def build_idea_view(idea_id: str | None = None) -> list[dict[str, Any]] | dict[s
 
     reactions_df = store.get("gv_reactions", pd.DataFrame())
 
+    # Build idea_id → list of sub-themes from input topics
+    idea_sub_themes = _build_idea_sub_themes_lookup()
+
     if idea_id is not None:
         # Single idea
         match = ideas_df[ideas_df["id"] == idea_id]
         if match.empty:
             return None
-        return _build_single_idea(match.iloc[0], reactions_df)
+        return _build_single_idea(match.iloc[0], reactions_df, idea_sub_themes)
 
     # All ideas
     results = []
     for _, row in ideas_df.iterrows():
-        results.append(_build_single_idea(row, reactions_df))
+        idea = _build_single_idea(row, reactions_df, idea_sub_themes)
+        idea.pop("sub_themes", None)
+        results.append(idea)
 
     # Sort by total reactions descending
     results.sort(key=lambda x: x["reactions"]["total"], reverse=True)
     return results
 
 
-def _build_single_idea(idea_row: pd.Series, reactions_df: pd.DataFrame) -> dict[str, Any]:
+def _build_idea_sub_themes_lookup() -> dict[str, list[dict[str, str]]]:
+    """Build a mapping from idea_id to its list of sub-themes (input topics)."""
+    join_df = store.get("gv_ideas_input_topics", pd.DataFrame())
+    topics_df = store.get("gv_input_topics", pd.DataFrame())
+
+    if join_df.empty or "idea_id" not in join_df.columns or "input_topic_id" not in join_df.columns:
+        return {}
+
+    # Build topic id → {id, title} lookup
+    topic_map: dict[str, dict[str, str]] = {}
+    if not topics_df.empty and "id" in topics_df.columns and "title" in topics_df.columns:
+        for _, row in topics_df.iterrows():
+            tid = str(row["id"])
+            topic_map[tid] = {"id": tid, "title": str(row["title"])}
+
+    lookup: dict[str, list[dict[str, str]]] = {}
+    for _, row in join_df.iterrows():
+        iid = str(row["idea_id"])
+        tid = str(row["input_topic_id"])
+        entry = topic_map.get(tid, {"id": tid, "title": tid})
+        lookup.setdefault(iid, []).append(entry)
+
+    return lookup
+
+
+def _build_single_idea(
+    idea_row: pd.Series,
+    reactions_df: pd.DataFrame,
+    idea_sub_themes: dict[str, list[dict[str, str]]] | None = None,
+) -> dict[str, Any]:
     """Build the unified view for a single idea."""
     idea_id = str(idea_row.get("id", ""))
 
@@ -1093,12 +1127,16 @@ def _build_single_idea(idea_row: pd.Series, reactions_df: pd.DataFrame) -> dict[
     wmga = _compute_consensus_score_wmga(idea_reactions, total)
     bridging.update(wmga)
 
+    # Sub-themes (input topics / tags)
+    sub_themes = (idea_sub_themes or {}).get(idea_id, [])
+
     return {
         "idea_id": idea_id,
         "title": str(title),
         "body": body_text,
         "project_id": _clean_val(idea_row.get("project_id")),
         "created_at": _clean_val(idea_row.get("created_at")),
+        "sub_themes": sub_themes,
         "author_demographics": author_demo,
         "reactions": {
             "total": total,
