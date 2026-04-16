@@ -380,6 +380,12 @@ def analytics_visits():
     return jsonify(analytics.compute_visits_timeline())
 
 
+@app.route("/api/analytics/combined-views")
+def analytics_combined_views():
+    """Combined views from GoVocal and Typeform."""
+    return jsonify(analytics.compute_combined_views())
+
+
 @app.route("/api/analytics/participation-rate")
 def analytics_participation_rate():
     """GoVocal Participation Rate over 24h, 36h, and 7 days."""
@@ -424,6 +430,12 @@ def analytics_voting_top_x():
 def analytics_voting_demographics():
     """Demographic breakdown of voters in the voting phase."""
     return jsonify(voting_analytics.compute_voter_demographics())
+
+
+@app.route("/api/analytics/voting/surveys")
+def analytics_voting_surveys():
+    """Completion counts (partial / completed) for each survey form."""
+    return jsonify(voting_analytics.compute_survey_completions())
 
 
 @app.route("/api/debug/scoring")

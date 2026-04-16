@@ -4,6 +4,7 @@ Analyses basket/vote data for the GoVocal voting phase and computes:
 - Per-issue vote percentages
 - Top-X coverage (what % of voters have at least 1 vote in top X)
 - Voter demographic breakdowns (age, race, political lean, region)
+- Typeform survey completion counts
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from typing import Any
 
 import pandas as pd
 
+from backend.api_client.typeform_api import TypeformClient
 from backend.data_store import store
 from backend.idea_analytics import (
     _build_email_demo_cache,
@@ -229,3 +231,54 @@ def compute_voter_demographics() -> dict[str, Any]:
         "voters_with_demographics": voters_with_demo,
         "demographics": demographics,
     }
+
+
+# ── Survey completion counts ─────────────────────────────────────────────
+
+# Cache form titles so we only fetch from Typeform once per process
+_form_title_cache: dict[str, str] = {}
+
+
+def _get_form_title(form_id: str) -> str:
+    """Return the human-readable title for *form_id*, fetching once from Typeform."""
+    if form_id in _form_title_cache:
+        return _form_title_cache[form_id]
+    try:
+        tf = TypeformClient()
+        defn = tf.get_form_definition(form_id)
+        title = defn.get("title", form_id)
+    except Exception:
+        log.warning("Could not fetch title for form %s", form_id)
+        title = form_id
+    _form_title_cache[form_id] = title
+    return title
+
+
+SURVEY_FORM_IDS = ["CLIThuG3", "A0l4rOL3", "vPlG5hrP", "vsy52uwm", "GUsjAeNu"]
+
+
+def compute_survey_completions() -> list[dict[str, Any]]:
+    """Return partial/completed counts for each survey form.
+
+    Returns a list of dicts, each with:
+      - form_id, title, completed, partial, total
+    """
+    results: list[dict[str, Any]] = []
+    for form_id in SURVEY_FORM_IDS:
+        key = f"tf_{form_id}"
+        df = store.get(key, pd.DataFrame())
+        if df.empty:
+            completed = 0
+            partial = 0
+        else:
+            completed = int((df["response_type"] == "completed").sum())
+            partial = int((df["response_type"] == "partial").sum())
+        title = _get_form_title(form_id)
+        results.append({
+            "form_id": form_id,
+            "title": title,
+            "completed": completed,
+            "partial": partial,
+            "total": completed + partial,
+        })
+    return results

@@ -77,6 +77,17 @@ const ParticipationTab = {
           </div>
         </div>
 
+        <!-- GoVocal Visitors -->
+        <div class="card-row" v-if="combinedViews && combinedViews.govocal">
+          <div class="card">
+            <div class="label">GoVocal Visitors</div>
+            <div class="value">{{ fmt(combinedViews.govocal.visitors) }}</div>
+            <div class="sub">
+              {{ fmt(combinedViews.govocal.page_loads) }} page loads
+            </div>
+          </div>
+        </div>
+
         <!-- Participation over time chart -->
         <div class="chart-container">
           <!-- Chart header: title + controls -->
@@ -179,6 +190,7 @@ const ParticipationTab = {
       timeline: [],
       participantsTimeline: [],
       visits: [],
+      combinedViews: null,
       participationRate: {},
       demographics: {},
       actionDistributions: { reactions: {}, ideas: {}, comments: {} },
@@ -256,6 +268,7 @@ const ParticipationTab = {
       this.participantsTimeline = sData.timeline || [];
       const vData            = this.preloaded.visits || {};
       this.visits            = vData.visits || [];
+      this.combinedViews     = this.preloaded.combinedViews || null;
       this.participationRate = this.preloaded.participationRate || {};
       this.demographics      = this.preloaded.demographics || {};
       this.actionDistributions = this.preloaded.actionDistributions || { reactions: {}, ideas: {}, comments: {} };

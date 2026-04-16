@@ -7,6 +7,7 @@ const DATA_ENDPOINTS = [
   { key: 'timeline',           url: '/api/analytics/participation-timeline',    label: 'Timeline' },
   { key: 'sourceTimeline',     url: '/api/analytics/participation-timeline/by-source', label: 'Source timeline' },
   { key: 'visits',             url: '/api/analytics/visits',                    label: 'Visits' },
+  { key: 'combinedViews',      url: '/api/analytics/combined-views',            label: 'Combined views' },
   { key: 'participationRate',  url: '/api/analytics/participation-rate',        label: 'Participation rate' },
   { key: 'ideas',              url: '/api/ideas',                               label: 'Ideas & bridging' },
   { key: 'demographics',       url: '/api/analytics/demographics-baseline',     label: 'Demographics' },
