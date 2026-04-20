@@ -39,7 +39,7 @@ class TypeformClient:
         """Send an authenticated GET and return the parsed JSON body."""
         url = f"{self._base_url}{endpoint}"
         headers = {"Authorization": f"Bearer {self._token}"}
-        resp = requests.get(url, headers=headers, params=params, timeout=60)
+        resp = requests.get(url, headers=headers, params=params, timeout=20)
         resp.raise_for_status()
         return resp.json()
 
@@ -114,6 +114,73 @@ class TypeformClient:
         all_items = completed_items + partial_items
         log.info("Typeform: form %s → %d total responses", form_id, len(all_items))
         return all_items
+
+    # ── Form metrics (visits / unique visitors / submissions) ────────────
+
+    def get_form_metrics(self, form_id: str) -> dict[str, Any]:
+        """Fetch form-level metrics from the ``/forms/{form_id}/metrics`` endpoint.
+
+        Returns a dict with ``title``, ``visits`` (total form sessions),
+        ``unique_visitors``, ``submissions`` (completed responses), and
+        ``average_time`` (average completion time in seconds), aggregated
+        across all device types.
+        """
+        # Form title
+        title = form_id
+        try:
+            defn = self.get_form_definition(form_id)
+            title = defn.get("title", form_id)
+        except Exception:
+            pass
+
+        body = self._request(f"/forms/{form_id}/metrics")
+
+        total_visits = 0
+        total_unique = 0
+        total_responses = 0
+        weighted_avg_sum = 0
+        for device_data in body.values():
+            if not isinstance(device_data, dict):
+                continue
+            visits = int(device_data.get("visits", 0))
+            total_visits += visits
+            total_unique += int(device_data.get("unique", 0))
+            total_responses += int(device_data.get("responses", 0))
+            weighted_avg_sum += int(device_data.get("average", 0)) * visits
+
+        avg_time = round(weighted_avg_sum / total_visits) if total_visits else 0
+
+        return {
+            "title": title,
+            "visits": total_visits,
+            "unique_visitors": total_unique,
+            "submissions": total_responses,
+            "average_time": avg_time,
+        }
+
+    def get_all_form_views(self) -> list[dict[str, Any]]:
+        """Return per-form visit counts for every configured Typeform form.
+
+        Returns a list of dicts with keys: ``form_id``, ``title``,
+        ``visits``, ``unique_visitors``, ``submissions``, ``average_time``.
+        """
+        results: list[dict[str, Any]] = []
+        for form_id in (Config.TF_FORM_IDS or []):
+            try:
+                data = self.get_form_metrics(form_id)
+                results.append({"form_id": form_id, **data})
+            except Exception as exc:
+                log.warning("Typeform metrics error (form %s): %s", form_id, exc)
+                results.append({
+                    "form_id": form_id,
+                    "title": form_id,
+                    "visits": 0,
+                    "unique_visitors": 0,
+                    "submissions": 0,
+                    "average_time": 0,
+                    "error": str(exc),
+                })
+        return results
 
     # ── Flattened responses ──────────────────────────────────────────────
 

@@ -1118,6 +1118,61 @@ def compute_participation_rate() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Combined views (GoVocal + Typeform)
+# ---------------------------------------------------------------------------
+
+def compute_combined_views() -> dict[str, Any]:
+    """Aggregate total visits from GoVocal (Insights API) and Typeform (Metrics API).
+
+    Returns per-source breakdowns plus a combined total.
+    """
+    from backend.api_client.typeform_api import TypeformClient
+
+    # ── GoVocal visits ───────────────────────────────────────────────────
+    gv_total_visitors = 0
+    gv_total_visits = 0
+    try:
+        gv = GoVocalClient()
+        raw = gv.get_visits(resolution="day")
+        for entry in raw:
+            gv_total_visitors += int(entry.get("visitors", 0))
+            gv_total_visits += int(entry.get("visits", 0))
+    except Exception as exc:
+        log.error("Failed to fetch GoVocal visits for combined views: %s", exc)
+
+    # ── Typeform visits ──────────────────────────────────────────────────
+    tf_forms: list[dict[str, Any]] = []
+    tf_total_visits = 0
+    tf_total_unique = 0
+    tf_total_submissions = 0
+    try:
+        tf = TypeformClient()
+        tf_forms = tf.get_all_form_views()
+        for f in tf_forms:
+            tf_total_visits += f.get("visits", 0)
+            tf_total_unique += f.get("unique_visitors", 0)
+            tf_total_submissions += f.get("submissions", 0)
+    except Exception as exc:
+        log.error("Failed to fetch Typeform metrics for combined views: %s", exc)
+
+    combined_total = gv_total_visitors + tf_total_visits
+
+    return {
+        "combined_total_visits": combined_total,
+        "govocal": {
+            "visitors": gv_total_visitors,
+            "page_loads": gv_total_visits,
+        },
+        "typeform": {
+            "total_visits": tf_total_visits,
+            "total_unique": tf_total_unique,
+            "total_submissions": tf_total_submissions,
+            "forms": tf_forms,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # All-in-one summary
 # ---------------------------------------------------------------------------
 

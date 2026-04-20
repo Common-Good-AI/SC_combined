@@ -123,6 +123,42 @@ const VotingTab = {
           </div>
         </div>
 
+        <!-- Surveys -->
+        <div style="margin-top:32px;" v-if="surveyData">
+          <h3 class="section-title">Surveys</h3>
+          <p style="color:#94a3b8; font-size:0.85rem; margin-bottom:12px;">
+            Partial and completed response counts for each survey.
+          </p>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Survey</th>
+                  <th style="width:120px; text-align:right">Completed</th>
+                  <th style="width:120px; text-align:right">Partial</th>
+                  <th style="width:120px; text-align:right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="s in surveyData" :key="s.form_id">
+                  <td>{{ s.title }}</td>
+                  <td style="text-align:right">{{ fmt(s.completed) }}</td>
+                  <td style="text-align:right">{{ fmt(s.partial) }}</td>
+                  <td style="text-align:right; font-weight:600;">{{ fmt(s.total) }}</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr style="border-top:2px solid #334155; font-weight:700;">
+                  <td>All Surveys</td>
+                  <td style="text-align:right">{{ fmt(surveyTotals.completed) }}</td>
+                  <td style="text-align:right">{{ fmt(surveyTotals.partial) }}</td>
+                  <td style="text-align:right">{{ fmt(surveyTotals.total) }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
         <!-- Demographics -->
         <div style="margin-top:32px;" v-if="demoData">
           <h3 class="section-title">Voter Demographics</h3>
@@ -170,6 +206,7 @@ const VotingTab = {
       topXData: null,
       topXLoading: false,
       demoData: null,
+      surveyData: null,
       _debounceTimer: null,
     };
   },
@@ -177,6 +214,14 @@ const VotingTab = {
   computed: {
     maxX() {
       return this.votingData.issues ? this.votingData.issues.length : 25;
+    },
+    surveyTotals() {
+      if (!this.surveyData) return { completed: 0, partial: 0, total: 0 };
+      return this.surveyData.reduce((acc, s) => ({
+        completed: acc.completed + s.completed,
+        partial: acc.partial + s.partial,
+        total: acc.total + s.total,
+      }), { completed: 0, partial: 0, total: 0 });
     },
   },
 
@@ -203,10 +248,11 @@ const VotingTab = {
         this.votingData = await res.json();
       }
 
-      // Fetch top-X and demographics in parallel
+      // Fetch top-X, demographics, and surveys in parallel
       await Promise.all([
         this.fetchTopX(),
         this.fetchDemographics(),
+        this.fetchSurveys(),
       ]);
 
       this.loading = false;
@@ -254,6 +300,15 @@ const VotingTab = {
         if (res.ok) this.demoData = await res.json();
       } catch (e) {
         console.error('Demographics fetch error:', e);
+      }
+    },
+
+    async fetchSurveys() {
+      try {
+        const res = await fetch('/api/analytics/voting/surveys');
+        if (res.ok) this.surveyData = await res.json();
+      } catch (e) {
+        console.error('Surveys fetch error:', e);
       }
     },
   },

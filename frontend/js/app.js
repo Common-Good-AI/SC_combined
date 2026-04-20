@@ -7,6 +7,7 @@ const DATA_ENDPOINTS = [
   { key: 'timeline',           url: '/api/analytics/participation-timeline',    label: 'Timeline' },
   { key: 'sourceTimeline',     url: '/api/analytics/participation-timeline/by-source', label: 'Source timeline' },
   { key: 'visits',             url: '/api/analytics/visits',                    label: 'Visits' },
+  { key: 'combinedViews',      url: '/api/analytics/combined-views',            label: 'Combined views' },
   { key: 'participationRate',  url: '/api/analytics/participation-rate',        label: 'Participation rate' },
   { key: 'ideas',              url: '/api/ideas',                               label: 'Ideas & bridging' },
   { key: 'demographics',       url: '/api/analytics/demographics-baseline',     label: 'Demographics' },
@@ -79,19 +80,25 @@ const app = createApp({
   methods: {
     async _waitForBackendReady() {
       // Poll /api/loading-status until data is loaded (or errored)
+      const MAX_WAIT_MS = 5 * 60 * 1000; // 5 minutes
+      const start = Date.now();
       while (true) {
         try {
           const res = await fetch('/api/loading-status');
           if (res.ok) {
             const info = await res.json();
-            if (info.status === 'loaded') return;
+            if (info.status === 'loaded' || info.status === 'loaded_with_errors') return;
             if (info.status === 'error' || info.status === 'config_error') {
-              throw new Error('Server failed to load data. Check config.');
+              const detail = (info.errors && info.errors.length) ? ': ' + info.errors[0] : '';
+              throw new Error('Server failed to load data' + detail);
             }
             this.loadStepLabel = `Server is loading data… (${info.tables_loaded} tables ready)`;
           }
         } catch (e) {
           if (e.message.includes('Server failed')) throw e;
+        }
+        if (Date.now() - start > MAX_WAIT_MS) {
+          throw new Error('Server took too long to load data. Please try refreshing.');
         }
         await new Promise(r => setTimeout(r, 2000));
       }

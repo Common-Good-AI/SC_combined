@@ -20,9 +20,12 @@ from backend import idea_analytics
 from backend import voting_analytics
 
 # ── Logging ──────────────────────────────────────────────────────────────
+# force=True ensures our config takes effect even when gunicorn has already
+# configured the root logger (basicConfig is otherwise a silent no-op).
 logging.basicConfig(
     level=logging.DEBUG if Config.DEBUG else logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+    force=True,
 )
 log = logging.getLogger(__name__)
 
@@ -105,23 +108,26 @@ _load_lock = threading.Lock()
 
 def _background_load() -> None:
     """Load data in a background thread so requests are never blocked."""
-    problems = Config.validate()
-    if problems:
-        log.warning("Config problems – data will NOT load:\n  • %s", "\n  • ".join(problems))
-        meta["status"] = "config_error"
-        meta["errors"] = problems
-        return
-
-    meta["status"] = "loading"
+    log.info("Background data load thread started.")
     try:
+        problems = Config.validate()
+        if problems:
+            log.warning("Config problems – data will NOT load:\n  • %s", "\n  • ".join(problems))
+            meta["status"] = "config_error"
+            meta["errors"] = problems
+            return
+
+        meta["status"] = "loading"
         if load_from_cache():
             log.info("Cache loaded – running incremental refresh …")
             refresh_incremental()
         else:
             log.info("No cache – running full refresh …")
             refresh_all()
+        log.info("Background data load complete – status=%s, tables=%d",
+                 meta["status"], len(store))
     except Exception as exc:
-        log.exception("Failed to load data on startup")
+        log.exception("Background data load failed")
         meta["status"] = "error"
         meta["errors"].append(str(exc))
 
@@ -215,6 +221,7 @@ def loading_status():
         "status": meta["status"],
         "tables_loaded": len(store),
         "last_refresh": meta["last_refresh"],
+        "errors": meta["errors"][-3:] if meta["errors"] else [],
     })
 
 
@@ -380,6 +387,12 @@ def analytics_visits():
     return jsonify(analytics.compute_visits_timeline())
 
 
+@app.route("/api/analytics/combined-views")
+def analytics_combined_views():
+    """Combined views from GoVocal and Typeform."""
+    return jsonify(analytics.compute_combined_views())
+
+
 @app.route("/api/analytics/participation-rate")
 def analytics_participation_rate():
     """GoVocal Participation Rate over 24h, 36h, and 7 days."""
@@ -424,6 +437,12 @@ def analytics_voting_top_x():
 def analytics_voting_demographics():
     """Demographic breakdown of voters in the voting phase."""
     return jsonify(voting_analytics.compute_voter_demographics())
+
+
+@app.route("/api/analytics/voting/surveys")
+def analytics_voting_surveys():
+    """Completion counts (partial / completed) for each survey form."""
+    return jsonify(voting_analytics.compute_survey_completions())
 
 
 @app.route("/api/debug/scoring")
