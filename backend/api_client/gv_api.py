@@ -46,7 +46,7 @@ class GoVocalClient:
                 "client_secret": self._client_secret,
             }
         }
-        resp = requests.post(url, json=payload, timeout=30)
+        resp = requests.post(url, json=payload, timeout=15)
         resp.raise_for_status()
         self._jwt = resp.json()["jwt"]
         self._jwt_expires_at = time.time() + _JWT_TTL_SECONDS
@@ -82,14 +82,14 @@ class GoVocalClient:
 
         while params["page_number"] <= total_pages:
             log.debug("GoVocal GET %s  page %s/%s", endpoint, params["page_number"], total_pages)
-            resp = requests.get(url, headers=headers, params=params, timeout=60)
+            resp = requests.get(url, headers=headers, params=params, timeout=20)
 
             # If 401, re-auth once and retry this page
             if resp.status_code == 401:
                 log.warning("GoVocal: 401 on %s – re-authenticating", endpoint)
                 self.authenticate()
                 headers = {"Authorization": f"Bearer {self._jwt}"}
-                resp = requests.get(url, headers=headers, params=params, timeout=60)
+                resp = requests.get(url, headers=headers, params=params, timeout=20)
 
             resp.raise_for_status()
             body = resp.json()

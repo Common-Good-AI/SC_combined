@@ -39,7 +39,7 @@ class TypeformClient:
         """Send an authenticated GET and return the parsed JSON body."""
         url = f"{self._base_url}{endpoint}"
         headers = {"Authorization": f"Bearer {self._token}"}
-        resp = requests.get(url, headers=headers, params=params, timeout=60)
+        resp = requests.get(url, headers=headers, params=params, timeout=20)
         resp.raise_for_status()
         return resp.json()
 
