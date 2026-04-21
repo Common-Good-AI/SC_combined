@@ -11,7 +11,7 @@ const ParticipationTab = {
         <!-- Summary cards -->
         <div class="card-row">
           <div class="card">
-            <div class="label">Total Participants</div>
+            <div class="label">Total Contributors</div>
             <div class="value">{{ fmt(participants.total) }}</div>
             <div class="sub">
               {{ fmt(participants.confirmed_users) }} confirmed ·
@@ -41,10 +41,10 @@ const ParticipationTab = {
           </div>
         </div>
 
-        <!-- GoVocal Participation Rate cards -->
+        <!-- GoVocal Contribution Rate cards -->
         <div class="card-row" v-if="participationRate && participationRate.rates">
           <div class="card">
-            <div class="label">GoVocal Participation Rate (24h)</div>
+            <div class="label">GoVocal Contribution Rate (24h)</div>
             <div class="value">{{ participationRate.rates['24h'] ? participationRate.rates['24h'].rate_pct + '%' : '–' }}</div>
             <div class="sub">
               {{ fmt(participationRate.rates['24h'] && participationRate.rates['24h'].users) }} users /
@@ -52,7 +52,7 @@ const ParticipationTab = {
             </div>
           </div>
           <div class="card">
-            <div class="label">GoVocal Participation Rate (72h)</div>
+            <div class="label">GoVocal Contribution Rate (72h)</div>
             <div class="value">{{ participationRate.rates['72h'] ? participationRate.rates['72h'].rate_pct + '%' : '–' }}</div>
             <div class="sub">
               {{ fmt(participationRate.rates['72h'] && participationRate.rates['72h'].users) }} users /
@@ -60,7 +60,7 @@ const ParticipationTab = {
             </div>
           </div>
           <div class="card">
-            <div class="label">GoVocal Participation Rate (7d)</div>
+            <div class="label">GoVocal Contribution Rate (7d)</div>
             <div class="value">{{ participationRate.rates['7d'] ? participationRate.rates['7d'].rate_pct + '%' : '–' }}</div>
             <div class="sub">
               {{ fmt(participationRate.rates['7d'] && participationRate.rates['7d'].users) }} users /
@@ -68,7 +68,7 @@ const ParticipationTab = {
             </div>
           </div>
           <div class="card">
-            <div class="label">GoVocal Participation Rate (All Time)</div>
+            <div class="label">GoVocal Contribution Rate (All Time)</div>
             <div class="value">{{ participationRate.all_time ? participationRate.all_time.rate_pct + '%' : '–' }}</div>
             <div class="sub">
               {{ fmt(participationRate.all_time && participationRate.all_time.users) }} users /

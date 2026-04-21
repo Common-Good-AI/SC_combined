@@ -49,7 +49,7 @@ const IdeasTab = {
 
         <!-- Popular themes from surveys -->
         <div class="themes-chart-container">
-          <h3>Most Popular Themes from Surveys</h3>
+          <h3>Issue Areas Selected by Participants</h3>
           <p v-if="!themes.selections || !themes.selections.length"
              style="color:#94a3b8; font-size:0.9rem;">No theme data available.</p>
           <div v-else class="themes-chart-wrap"

@@ -395,7 +395,7 @@ def analytics_combined_views():
 
 @app.route("/api/analytics/participation-rate")
 def analytics_participation_rate():
-    """GoVocal Participation Rate over 24h, 36h, and 7 days."""
+    """GoVocal Contribution Rate over 24h, 36h, and 7 days."""
     return jsonify(analytics.compute_participation_rate())
 
 

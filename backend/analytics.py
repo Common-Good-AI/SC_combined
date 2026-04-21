@@ -1037,11 +1037,11 @@ def compute_visits_timeline() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# GoVocal Participation Rate (users vs visits)
+# GoVocal Contribution Rate (users vs visits)
 # ---------------------------------------------------------------------------
 
 def compute_participation_rate() -> dict[str, Any]:
-    """Compute GoVocal Participation Rate over 24 h, 36 h and 7 days.
+    """Compute GoVocal Contribution Rate over 24 h, 36 h and 7 days.
 
     Participation rate = (GoVocal registered users / total visits) * 100.
 
@@ -1107,7 +1107,7 @@ def compute_participation_rate() -> dict[str, Any]:
     all_time_rate = (total_users / total_visits * 100) if total_visits else 0.0
 
     return {
-        "label": "GoVocal Participation Rate",
+        "label": "GoVocal Contribution Rate",
         "rates": rates,
         "all_time": {
             "users": total_users,
