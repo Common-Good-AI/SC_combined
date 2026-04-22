@@ -445,6 +445,39 @@ def analytics_voting_surveys():
     return jsonify(voting_analytics.compute_survey_completions())
 
 
+@app.route("/api/debug/voting")
+def debug_voting():
+    """Diagnostic endpoint for voting/basket data."""
+    import pandas as pd
+    baskets = store.get("gv_baskets", pd.DataFrame())
+    basket_ideas = store.get("gv_basket_ideas", pd.DataFrame())
+    phases = store.get("gv_phases", pd.DataFrame())
+
+    phase_ids = baskets["phase_id"].unique().tolist() if not baskets.empty and "phase_id" in baskets.columns else []
+    cols = baskets.columns.tolist() if not baskets.empty else []
+    submitted = baskets[baskets["submitted_at"].notna()] if not baskets.empty and "submitted_at" in baskets.columns else pd.DataFrame()
+
+    phase_list = []
+    if not phases.empty:
+        for _, p in phases.iterrows():
+            phase_list.append({"id": p.get("id"), "title": p.get("title"), "participation_method": p.get("participation_method")})
+
+    sample = baskets.head(3).to_dict(orient="records") if not baskets.empty else []
+
+    return jsonify({
+        "baskets_total": len(baskets),
+        "baskets_columns": cols,
+        "baskets_phase_ids": phase_ids,
+        "baskets_submitted": len(submitted),
+        "basket_ideas_total": len(basket_ideas),
+        "basket_ideas_columns": basket_ideas.columns.tolist() if not basket_ideas.empty else [],
+        "hardcoded_voting_phase_id": voting_analytics.VOTING_PHASE_ID,
+        "baskets_matching_phase": int(baskets[baskets["phase_id"] == voting_analytics.VOTING_PHASE_ID].shape[0]) if not baskets.empty and "phase_id" in baskets.columns else 0,
+        "phases": phase_list,
+        "sample_baskets": sample,
+    })
+
+
 @app.route("/api/debug/scoring")
 def debug_scoring():
     """Diagnostic endpoint showing the state of scoring caches."""
