@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -179,6 +180,10 @@ def _ingest_govocal(gv: GoVocalClient) -> dict[str, pd.DataFrame]:
         errors.append(msg)
 
     # --- Baskets (voting) ---
+    # Brief pause so the burst of earlier requests clears the rate-limit window
+    # before we start the basket/basket_ideas fetches.
+    log.info("GoVocal: pausing before basket fetch to avoid rate-limit carry-over …")
+    time.sleep(5)
     try:
         baskets_raw = gv.get_baskets()
         if baskets_raw:
@@ -600,6 +605,9 @@ def _ingest_govocal_incremental(gv: GoVocalClient) -> None:
         log.error("GoVocal idea-topic associations error: %s", exc)
 
     # --- Baskets (voting) ---
+    # Brief pause so earlier incremental requests clear the rate-limit window.
+    log.info("GoVocal: pausing before basket fetch to avoid rate-limit carry-over …")
+    time.sleep(5)
     try:
         api_count = gv.get_basket_count()
         cached_count = len(store.get("gv_baskets", pd.DataFrame()))
