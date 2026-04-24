@@ -254,7 +254,7 @@ def _get_form_title(form_id: str) -> str:
     return title
 
 
-SURVEY_FORM_IDS = ["CLIThuG3", "A0l4rOL3", "vPlG5hrP", "vsy52uwm", "GUsjAeNu"]
+SURVEY_FORM_IDS = ["CLIThuG3", "A0l4rOL3", "vPlG5hrP", "vsy52uwm", "GUsjAeNu", "KdHzkJeL", "PmPIQkd8", "YcnYy8ah"]
 
 
 def compute_survey_completions() -> list[dict[str, Any]]:

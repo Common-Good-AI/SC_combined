@@ -83,7 +83,7 @@ class GoVocalClient:
         while params["page_number"] <= total_pages:
             log.debug("GoVocal GET %s  page %s/%s", endpoint, params["page_number"], total_pages)
 
-            for attempt in range(8):
+            for attempt in range(5):
                 resp = requests.get(url, headers=headers, params=params, timeout=20)
 
                 # If 401, re-auth once and retry this page
@@ -94,13 +94,13 @@ class GoVocalClient:
                     resp = requests.get(url, headers=headers, params=params, timeout=20)
 
                 if resp.status_code == 429:
-                    # Honour Retry-After if the server sends it; otherwise exponential back-off
+                    # Honour Retry-After if present, capped at 30s; else exponential back-off
                     retry_after = resp.headers.get("Retry-After", "")
                     try:
-                        wait = max(int(retry_after), 1)
+                        wait = min(int(retry_after), 30)
                     except (ValueError, TypeError):
-                        wait = min(2 ** attempt, 60)
-                    log.warning("GoVocal: 429 on %s page %s – retrying in %ds (attempt %d/8)",
+                        wait = min(2 ** attempt, 30)
+                    log.warning("GoVocal: 429 on %s page %s – retrying in %ds (attempt %d/5)",
                                 endpoint, params["page_number"], wait, attempt + 1)
                     time.sleep(wait)
                     continue
@@ -125,9 +125,9 @@ class GoVocalClient:
                 break
             params["page_number"] += 1
 
-            # Small delay between pages to avoid rate-limiting
+            # Delay between pages to stay within rate limits
             if params["page_number"] <= total_pages:
-                time.sleep(0.15)
+                time.sleep(0.5)
 
         log.info("GoVocal: %s → %d items", endpoint, len(all_items))
         return all_items
@@ -146,14 +146,14 @@ class GoVocalClient:
         p["page_size"] = 1
         p["page_number"] = 1
         headers = {"Authorization": f"Bearer {self._jwt}"}
-        for attempt in range(8):
+        for attempt in range(5):
             resp = requests.get(url, headers=headers, params=p, timeout=30)
             if resp.status_code == 429:
                 retry_after = resp.headers.get("Retry-After", "")
                 try:
-                    wait = max(int(retry_after), 1)
+                    wait = min(int(retry_after), 30)
                 except (ValueError, TypeError):
-                    wait = min(2 ** attempt, 60)
+                    wait = min(2 ** attempt, 30)
                 log.warning("GoVocal: 429 on count %s – retrying in %ds", endpoint, wait)
                 time.sleep(wait)
                 continue
