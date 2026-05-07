@@ -233,6 +233,207 @@ def compute_voter_demographics() -> dict[str, Any]:
     }
 
 
+def compute_issue_voter_demographics(idea_id: str) -> dict[str, Any] | None:
+    """Compute demographic breakdowns for voters who voted for a specific issue.
+
+    Parameters
+    ----------
+    idea_id : str
+        The idea/issue ID to analyze.
+
+    Returns
+    -------
+    dict with total_voters, voters_with_demographics, title, idea_id, and demographics
+    (same structure as compute_voter_demographics but scoped to one issue).
+    None if the idea_id is not found in voting data.
+    """
+    submitted = _submitted_baskets()
+    if submitted.empty:
+        return {"idea_id": idea_id, "title": "", "total_voters": 0,
+                "voters_with_demographics": 0, "demographics": {}}
+
+    basket_ideas = store.get("gv_basket_ideas", pd.DataFrame())
+    if basket_ideas.empty:
+        return {"idea_id": idea_id, "title": "", "total_voters": 0,
+                "voters_with_demographics": 0, "demographics": {}}
+
+    submitted_ids = set(submitted["id"])
+
+    # Filter basket_ideas to submitted baskets that include this idea
+    phase_votes = basket_ideas[
+        (basket_ideas["basket_id"].isin(submitted_ids)) &
+        (basket_ideas["idea_id"] == idea_id)
+    ]
+
+    if phase_votes.empty:
+        return None  # idea not found in voting data
+
+    # Get user_ids from the baskets that voted for this idea
+    basket_ids_for_idea = set(phase_votes["basket_id"])
+    matching_baskets = submitted[submitted["id"].isin(basket_ids_for_idea)]
+    voter_user_ids = matching_baskets["user_id"].dropna().unique().tolist()
+    total_voters = len(voter_user_ids)
+
+    # Resolve idea title
+    ideas_df = store.get("gv_ideas", pd.DataFrame())
+    title = ""
+    if not ideas_df.empty and "id" in ideas_df.columns:
+        match = ideas_df[ideas_df["id"] == idea_id]
+        if not match.empty:
+            t = match.iloc[0].get("title", "")
+            if isinstance(t, dict):
+                t = t.get("en", str(t))
+            title = _strip_html(str(t)) if t else ""
+
+    # Build demographic caches (thread-safe)
+    with _cache_lock:
+        _build_email_demo_cache()
+        _build_userid_email_map()
+
+    # Resolve demographics for each voter
+    voter_demos: list[dict[str, str | None]] = []
+    for uid in voter_user_ids:
+        email = _ia._userid_email_map.get(uid)
+        if email:
+            demo = _ia._email_demo_cache.get(email, {})
+        else:
+            demo = {}
+        voter_demos.append(demo)
+
+    # Count voters with any demographic data
+    voters_with_demo = sum(
+        1 for d in voter_demos
+        if any(d.get(dim) is not None for dim in BRIDGING_DIMENSIONS)
+    )
+
+    # Build distribution for each dimension
+    dimensions_to_report = ["age_bucket", "race", "political_lean", "region"]
+    demographics: dict[str, Any] = {}
+
+    for dim in dimensions_to_report:
+        counts: dict[str, int] = {}
+        known = 0
+        for demo in voter_demos:
+            val = demo.get(dim)
+            if val is not None:
+                known += 1
+                counts[val] = counts.get(val, 0) + 1
+        groups = sorted(
+            [{"label": label, "count": count, "pct": round(count / known * 100, 1) if known > 0 else 0.0}
+             for label, count in counts.items()],
+            key=lambda g: g["count"],
+            reverse=True,
+        )
+        demographics[dim] = {"groups": groups, "known": known}
+
+    return {
+        "idea_id": idea_id,
+        "title": title,
+        "total_voters": total_voters,
+        "voters_with_demographics": voters_with_demo,
+        "demographics": demographics,
+    }
+
+
+def compute_all_issue_demographics() -> list[dict[str, Any]]:
+    """Demographic breakdowns for every issue in the voting phase.
+
+    Builds caches once and reuses them across all issues for efficiency.
+    Returns a list of dicts (same structure as compute_issue_voter_demographics).
+    """
+    submitted = _submitted_baskets()
+    if submitted.empty:
+        return []
+
+    basket_ideas = store.get("gv_basket_ideas", pd.DataFrame())
+    if basket_ideas.empty:
+        return []
+
+    submitted_ids = set(submitted["id"])
+    phase_votes = basket_ideas[basket_ideas["basket_id"].isin(submitted_ids)].copy()
+    if phase_votes.empty:
+        return []
+
+    # Build demographic caches once
+    with _cache_lock:
+        _build_email_demo_cache()
+        _build_userid_email_map()
+
+    # Build title map once
+    ideas_df = store.get("gv_ideas", pd.DataFrame())
+    title_map: dict[str, str] = {}
+    if not ideas_df.empty and "id" in ideas_df.columns:
+        for _, row in ideas_df.iterrows():
+            t = row.get("title", "")
+            if isinstance(t, dict):
+                t = t.get("en", str(t))
+            title_map[row["id"]] = _strip_html(str(t)) if t else ""
+
+    # Build basket → user_id map once
+    basket_user = submitted.set_index("id")["user_id"].to_dict()
+
+    # Get all unique idea_ids voted on
+    all_idea_ids = phase_votes["idea_id"].unique()
+
+    dimensions_to_report = ["age_bucket", "race", "political_lean", "region"]
+    results: list[dict[str, Any]] = []
+
+    for idea_id in all_idea_ids:
+        idea_votes = phase_votes[phase_votes["idea_id"] == idea_id]
+        basket_ids_for_idea = set(idea_votes["basket_id"])
+        voter_user_ids = [
+            basket_user[bid] for bid in basket_ids_for_idea
+            if bid in basket_user and pd.notna(basket_user[bid])
+        ]
+        # Deduplicate
+        voter_user_ids = list(set(voter_user_ids))
+        total_voters = len(voter_user_ids)
+
+        # Resolve demographics
+        voter_demos: list[dict[str, str | None]] = []
+        for uid in voter_user_ids:
+            email = _ia._userid_email_map.get(uid)
+            if email:
+                demo = _ia._email_demo_cache.get(email, {})
+            else:
+                demo = {}
+            voter_demos.append(demo)
+
+        voters_with_demo = sum(
+            1 for d in voter_demos
+            if any(d.get(dim) is not None for dim in BRIDGING_DIMENSIONS)
+        )
+
+        demographics: dict[str, Any] = {}
+        for dim in dimensions_to_report:
+            counts: dict[str, int] = {}
+            known = 0
+            for demo in voter_demos:
+                val = demo.get(dim)
+                if val is not None:
+                    known += 1
+                    counts[val] = counts.get(val, 0) + 1
+            groups = sorted(
+                [{"label": label, "count": count, "pct": round(count / known * 100, 1) if known > 0 else 0.0}
+                 for label, count in counts.items()],
+                key=lambda g: g["count"],
+                reverse=True,
+            )
+            demographics[dim] = {"groups": groups, "known": known}
+
+        results.append({
+            "idea_id": idea_id,
+            "title": title_map.get(idea_id, ""),
+            "total_voters": total_voters,
+            "voters_with_demographics": voters_with_demo,
+            "demographics": demographics,
+        })
+
+    # Sort by total_voters descending
+    results.sort(key=lambda r: r["total_voters"], reverse=True)
+    return results
+
+
 # ── Survey completion counts ─────────────────────────────────────────────
 
 # Cache form titles so we only fetch from Typeform once per process

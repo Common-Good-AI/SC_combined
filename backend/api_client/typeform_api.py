@@ -15,7 +15,7 @@ from backend.config import Config
 
 log = logging.getLogger(__name__)
 
-_PAGE_SIZE = 1000  # Typeform max per request
+_PAGE_SIZE = 500  # Typeform returns at most 1000 per request; use 500 to avoid silent truncation
 
 
 class TypeformClient:
@@ -62,26 +62,89 @@ class TypeformClient:
         self,
         form_id: str,
         params: dict[str, Any],
+        seen_tokens: set[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Paginate through all response pages for the given *params*."""
+        """Paginate through all response pages using cursor + time-window fallback.
+
+        The Typeform API limits cursor-based pagination (``after``) to ~1000
+        items per window.  When that limit is hit, we use the ``until``
+        parameter (set to the oldest item's submitted_at) to open a new
+        window of older responses and continue paginating.
+
+        *seen_tokens* can be passed in to deduplicate across multiple calls
+        (e.g. completed + partial fetches).
+        """
         all_items: list[dict[str, Any]] = []
         params = {**params, "page_size": _PAGE_SIZE}
+        if seen_tokens is None:
+            seen_tokens = set()
+        reported_total: int = 0
+        max_windows = 30  # Safety limit on time-window iterations
 
-        while True:
-            body = self._request(f"/forms/{form_id}/responses", params=params)
-            items = body.get("items", [])
-            all_items.extend(items)
+        for _ in range(max_windows):
+            # Cursor-paginate within the current time window
+            window_params = {**params}
+            window_params.pop("after", None)  # Reset cursor for each new window
+            window_items: list[dict[str, Any]] = []
 
-            # If we got fewer than page_size, we've reached the end
-            if len(items) < _PAGE_SIZE:
+            while True:
+                body = self._request(f"/forms/{form_id}/responses", window_params)
+                items = body.get("items", [])
+
+                # Capture total_items from the first request (no 'until' set)
+                if not reported_total and "until" not in params:
+                    reported_total = body.get("total_items", 0)
+
+                # Deduplicate
+                new_in_page = []
+                for item in items:
+                    token = item.get("token") or item.get("response_id", "")
+                    if token and token not in seen_tokens:
+                        seen_tokens.add(token)
+                        new_in_page.append(item)
+                window_items.extend(new_in_page)
+
+                # If fewer than page_size, this window is exhausted
+                if len(items) < _PAGE_SIZE:
+                    break
+
+                # Use cursor for next page within this window
+                last_token = items[-1].get("token")
+                if not last_token:
+                    break
+                window_params["after"] = last_token
+
+            all_items.extend(window_items)
+
+            log.debug(
+                "Typeform pagination: form %s window collected %d items "
+                "(total so far: %d, reported_total: %d)",
+                form_id, len(window_items), len(all_items), reported_total,
+            )
+
+            # If we got nothing new in this window, we're done
+            if not window_items:
                 break
 
-            # Use the *last* item's token as the ``after`` cursor
-            last_token = items[-1].get("token")
-            if not last_token:
+            # NOTE: Typeform may cap total_items at its cursor limit (~1000).
+            # Only trust reported_total if it's clearly above that limit.
+            if reported_total > 1000 and len(all_items) >= reported_total:
                 break
-            params["after"] = last_token
 
+            # Open a new time window: use 'until' = oldest item's submitted_at
+            oldest_item = window_items[-1]
+            oldest_time = oldest_item.get("submitted_at") or oldest_item.get("landed_at")
+            if not oldest_time:
+                break
+
+            params = {**params, "until": oldest_time}
+            params.pop("after", None)
+
+        log.info(
+            "Typeform: form %s pagination complete — %d responses collected "
+            "(API reported %d)",
+            form_id, len(all_items), reported_total,
+        )
         return all_items
 
     def get_responses_raw(
@@ -99,15 +162,19 @@ class TypeformClient:
         if since:
             base_params["since"] = since
 
+        # Shared seen_tokens across both calls to deduplicate responses
+        # that may appear in both completed and partial results
+        seen_tokens: set[str] = set()
+
         # Fetch completed responses
         completed_items = self._paginate_responses(
-            form_id, {**base_params, "completed": "true"},
+            form_id, {**base_params, "completed": "true"}, seen_tokens=seen_tokens,
         )
         log.info("Typeform: form %s → %d completed responses", form_id, len(completed_items))
 
         # Fetch partial (incomplete) responses
         partial_items = self._paginate_responses(
-            form_id, {**base_params, "completed": "false"},
+            form_id, {**base_params, "completed": "false"}, seen_tokens=seen_tokens,
         )
         log.info("Typeform: form %s → %d partial responses", form_id, len(partial_items))
 
@@ -210,11 +277,16 @@ class TypeformClient:
         # 2) Get raw responses
         raw_items = self.get_responses_raw(form_id, since=since)
 
-        # 3) Flatten each response
+        # 3) Flatten each response (deduplicate by response_id as safety net)
         flat: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
         for item in raw_items:
+            rid = item.get("response_id") or item.get("token", "")
+            if rid in seen_ids:
+                continue
+            seen_ids.add(rid)
             row: dict[str, Any] = {
-                "response_id": item.get("response_id") or item.get("token", ""),
+                "response_id": rid,
                 "submitted_at": item.get("submitted_at"),
                 "landed_at": item.get("landed_at"),
                 "response_type": "completed" if item.get("submitted_at") else "partial",

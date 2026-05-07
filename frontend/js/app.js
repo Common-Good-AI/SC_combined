@@ -112,5 +112,6 @@ app.component('participation-tab', ParticipationTab);
 app.component('ideas-tab', IdeasTab);
 app.component('voting-tab', VotingTab);
 app.component('idea-detail', IdeaDetail);
+app.component('voting-issue-detail', VotingIssueDetail);
 
 app.mount('#app');

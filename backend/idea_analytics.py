@@ -1050,7 +1050,6 @@ def build_idea_view(idea_id: str | None = None) -> list[dict[str, Any]] | dict[s
     results = []
     for _, row in ideas_df.iterrows():
         idea = _build_single_idea(row, reactions_df, idea_sub_themes)
-        idea.pop("sub_themes", None)
         results.append(idea)
 
     # Sort by total reactions descending
@@ -1059,25 +1058,29 @@ def build_idea_view(idea_id: str | None = None) -> list[dict[str, Any]] | dict[s
 
 
 def _build_idea_sub_themes_lookup() -> dict[str, list[dict[str, str]]]:
-    """Build a mapping from idea_id to its list of sub-themes (input topics)."""
+    """Build a mapping from idea_id to its list of topics (input topics)."""
     join_df = store.get("gv_ideas_input_topics", pd.DataFrame())
     topics_df = store.get("gv_input_topics", pd.DataFrame())
 
     if join_df.empty or "idea_id" not in join_df.columns or "input_topic_id" not in join_df.columns:
         return {}
 
-    # Build topic id → {id, title} lookup
+    # Build topic id → {id, title, description} lookup
     topic_map: dict[str, dict[str, str]] = {}
     if not topics_df.empty and "id" in topics_df.columns and "title" in topics_df.columns:
         for _, row in topics_df.iterrows():
             tid = str(row["id"])
-            topic_map[tid] = {"id": tid, "title": str(row["title"])}
+            topic_map[tid] = {
+                "id": tid,
+                "title": str(row["title"]),
+                "description": str(row.get("description", "") or ""),
+            }
 
     lookup: dict[str, list[dict[str, str]]] = {}
     for _, row in join_df.iterrows():
         iid = str(row["idea_id"])
         tid = str(row["input_topic_id"])
-        entry = topic_map.get(tid, {"id": tid, "title": tid})
+        entry = topic_map.get(tid, {"id": tid, "title": tid, "description": ""})
         lookup.setdefault(iid, []).append(entry)
 
     return lookup
@@ -1122,13 +1125,8 @@ def _build_single_idea(
     if isinstance(title, dict):
         title = title.get("en", title.get("", str(title)))
 
-    # Consensus score (both algorithms)
-    bridging = _compute_consensus_score(idea_reactions, total)
-    wmga = _compute_consensus_score_wmga(idea_reactions, total)
-    bridging.update(wmga)
-
-    # Sub-themes (input topics / tags)
-    sub_themes = (idea_sub_themes or {}).get(idea_id, [])
+    # Input topics (AI-generated tags from GoVocal)
+    topics = (idea_sub_themes or {}).get(idea_id, [])
 
     return {
         "idea_id": idea_id,
@@ -1136,7 +1134,7 @@ def _build_single_idea(
         "body": body_text,
         "project_id": _clean_val(idea_row.get("project_id")),
         "created_at": _clean_val(idea_row.get("created_at")),
-        "sub_themes": sub_themes,
+        "topics": topics,
         "author_demographics": author_demo,
         "reactions": {
             "total": total,
@@ -1144,5 +1142,4 @@ def _build_single_idea(
             "downvotes": downvotes,
             "demographic_breakdown": demo_breakdown,
         },
-        "bridging": bridging,
     }

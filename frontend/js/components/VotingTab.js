@@ -45,7 +45,9 @@ const VotingTab = {
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(issue, idx) in votingData.issues" :key="issue.idea_id">
+                <tr v-for="(issue, idx) in votingData.issues" :key="issue.idea_id"
+                    @click="selectedIssueId = issue.idea_id"
+                    class="clickable">
                   <td style="color:#94a3b8;">{{ idx + 1 }}</td>
                   <td>{{ issue.title }}</td>
                   <td style="text-align:right">{{ issue.voters }}</td>
@@ -192,6 +194,13 @@ const VotingTab = {
           </div>
         </div>
 
+        <!-- Issue detail modal -->
+        <voting-issue-detail
+          v-if="selectedIssueId"
+          :idea-id="selectedIssueId"
+          @close="selectedIssueId = null"
+        />
+
       </template>
     </div>
   `,
@@ -201,6 +210,7 @@ const VotingTab = {
       loading: true,
       error: null,
       votingData: {},
+      selectedIssueId: null,
       topX: 6,
       minY: 1,
       topXData: null,

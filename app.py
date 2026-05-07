@@ -359,14 +359,13 @@ def ideas_detail(idea_id: str):
 
 @app.route("/api/ideas/bridging")
 def ideas_by_bridging():
-    """Ideas sorted by consensus score (descending). Includes only ideas with a score."""
+    """Ideas sorted by total reactions (descending). Bridging score disabled."""
     all_ideas = idea_analytics.build_idea_view()
     if not all_ideas or not isinstance(all_ideas, list):
         return jsonify([])
-    # Filter to ideas that have a consensus score, sort descending
-    scored = [i for i in all_ideas if i.get("bridging", {}).get("consensus_score") is not None]
-    scored.sort(key=lambda x: x["bridging"]["consensus_score"], reverse=True)
-    return jsonify(scored)
+    # Sort by total reactions descending (bridging score disabled)
+    all_ideas.sort(key=lambda x: x["reactions"]["total"], reverse=True)
+    return jsonify(all_ideas)
 
 
 @app.route("/api/analytics/participation-timeline")
@@ -443,6 +442,21 @@ def analytics_voting_demographics():
 def analytics_voting_surveys():
     """Completion counts (partial / completed) for each survey form."""
     return jsonify(voting_analytics.compute_survey_completions())
+
+
+@app.route("/api/analytics/voting/issue/<idea_id>/demographics")
+def analytics_voting_issue_demographics(idea_id: str):
+    """Demographic breakdown of voters who voted for a specific issue."""
+    result = voting_analytics.compute_issue_voter_demographics(idea_id)
+    if result is None:
+        return jsonify({"error": f"Issue '{idea_id}' not found in voting data"}), 404
+    return jsonify(result)
+
+
+@app.route("/api/analytics/voting/demographics/all-issues")
+def analytics_voting_all_issue_demographics():
+    """Demographic breakdown for every issue in the voting phase."""
+    return jsonify(voting_analytics.compute_all_issue_demographics())
 
 
 @app.route("/api/debug/voting")

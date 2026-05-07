@@ -261,7 +261,10 @@ _GV_IDEA_DEMO_MAP: dict[str, str] = {
 _TF_DEMO_MAP: dict[str, str] = {
     # Wording set A (tf_KdHzkJeL, tf_PmPIQkd8, tf_YcnYy8ah)
     "First of all, how old are you?": "age",
+    "First of all, what is your age?": "age",
     "What is your race?": "race",
+    "Which of following best describes your race?": "race",
+    "Which of the following best describes your race?": "race",
     "What's your *zipcode*?": "zipcode",
     "How would you describe your political views?": "political_lean",
     # Wording set B (tf_A0l4rOL3, tf_vPlG5hrP, tf_vsy52uwm)
@@ -273,6 +276,7 @@ _TF_DEMO_MAP: dict[str, str] = {
     "Además, ¿cuál es tu *edad*?": "age",
     "¿Cuál de las siguientes opciones describe mejor tu *raza*?": "race",
     "¡Bienvenido/a! ¿Cuál es tu *código postal*?": "zipcode",
+    "¡Bienvenido/a!\n¿Cuál es tu *código postal*?": "zipcode",
     "¿Cómo describirías tus *opiniones políticas*?": "political_lean",
 }
 
