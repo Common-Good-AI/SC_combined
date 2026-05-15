@@ -434,6 +434,219 @@ def compute_all_issue_demographics() -> list[dict[str, Any]]:
     return results
 
 
+# ── Demographic "What-If" filter helpers ─────────────────────────────────
+
+FILTER_DIMENSIONS = ["age_bucket", "race", "political_lean", "region"]
+
+_DIM_LABELS = {
+    "age_bucket": "Age",
+    "race": "Race / Ethnicity",
+    "political_lean": "Political Lean",
+    "region": "Region",
+}
+
+
+def _get_filtered_basket_ids(filters: dict[str, list[str]]) -> tuple[set[str], int]:
+    """Return (basket IDs, matching voter count) for voters matching ALL demographic filters.
+
+    Parameters
+    ----------
+    filters : dict mapping dimension name to list of acceptable group values.
+        Logic: AND across dimensions, OR within a dimension.
+        e.g. {"race": ["Black"], "age_bucket": ["18-29", "30-39"]} means
+        voters who are Black AND (aged 18-29 OR 30-39).
+    """
+    submitted = _submitted_baskets()
+    if submitted.empty:
+        return set(), 0
+
+    with _cache_lock:
+        _build_email_demo_cache()
+        _build_userid_email_map()
+
+    # Find user_ids matching all filter criteria
+    matching_user_ids: set[str] = set()
+    for uid in submitted["user_id"].dropna().unique():
+        email = _ia._userid_email_map.get(uid)
+        if not email:
+            continue
+        demo = _ia._email_demo_cache.get(email, {})
+        # Check every dimension in the filter (AND logic)
+        match = True
+        for dim, groups in filters.items():
+            val = demo.get(dim)
+            if val is None or val not in groups:
+                match = False
+                break
+        if match:
+            matching_user_ids.add(uid)
+
+    if not matching_user_ids:
+        return set(), 0
+
+    filtered_baskets = submitted[submitted["user_id"].isin(matching_user_ids)]
+    return set(filtered_baskets["id"]), len(matching_user_ids)
+
+
+def compute_voting_results_filtered(filters: dict[str, list[str]]) -> dict[str, Any]:
+    """Compute per-issue vote percentages considering only voters matching demographic filters.
+
+    Same return shape as compute_voting_results() with an added filter_info field.
+    """
+    filtered_basket_ids, filtered_voters = _get_filtered_basket_ids(filters)
+    if not filtered_basket_ids:
+        return {
+            "total_voters": 0,
+            "total_votes": 0,
+            "issues": [],
+            "filter_info": {"filters": filters, "filtered_voters": 0},
+        }
+
+    basket_ideas = store.get("gv_basket_ideas", pd.DataFrame())
+    if basket_ideas.empty:
+        return {
+            "total_voters": 0,
+            "total_votes": 0,
+            "issues": [],
+            "filter_info": {"filters": filters, "filtered_voters": filtered_voters},
+        }
+
+    total_voters = filtered_voters
+    phase_votes = basket_ideas[basket_ideas["basket_id"].isin(filtered_basket_ids)].copy()
+    total_votes = int(phase_votes["votes"].sum()) if "votes" in phase_votes.columns else len(phase_votes)
+
+    idea_voter_counts = phase_votes.groupby("idea_id").size().reset_index(name="voters")
+
+    ideas_df = store.get("gv_ideas", pd.DataFrame())
+    if not ideas_df.empty and "id" in ideas_df.columns:
+        titles = ideas_df[["id", "title"]].rename(columns={"id": "idea_id"})
+        idea_voter_counts = idea_voter_counts.merge(titles, on="idea_id", how="left")
+    else:
+        idea_voter_counts["title"] = ""
+
+    idea_voter_counts["vote_pct"] = round(idea_voter_counts["voters"] / total_voters * 100, 1)
+    idea_voter_counts = idea_voter_counts.sort_values("vote_pct", ascending=False)
+
+    issues = []
+    for _, row in idea_voter_counts.iterrows():
+        title = row.get("title", "")
+        if isinstance(title, dict):
+            title = title.get("en", str(title))
+        issues.append({
+            "idea_id": row["idea_id"],
+            "title": _strip_html(str(title)) if title else "",
+            "voters": int(row["voters"]),
+            "vote_pct": float(row["vote_pct"]),
+        })
+
+    return {
+        "total_voters": total_voters,
+        "total_votes": total_votes,
+        "issues": issues,
+        "filter_info": {"filters": filters, "filtered_voters": filtered_voters},
+    }
+
+
+def compute_top_x_coverage_filtered(x: int, min_votes: int, filters: dict[str, list[str]]) -> dict[str, Any]:
+    """Compute top-X coverage considering only voters matching demographic filters."""
+    empty = {"x": x, "min_votes": min_votes, "top_ideas": [],
+             "voters_with_match": 0, "voters_total": 0, "coverage_pct": 0.0,
+             "filter_info": {"filters": filters, "filtered_voters": 0}}
+
+    filtered_basket_ids, filtered_voters = _get_filtered_basket_ids(filters)
+    if not filtered_basket_ids:
+        return empty
+
+    basket_ideas = store.get("gv_basket_ideas", pd.DataFrame())
+    if basket_ideas.empty:
+        return empty
+
+    submitted = _submitted_baskets()
+    total_voters = filtered_voters
+    phase_votes = basket_ideas[basket_ideas["basket_id"].isin(filtered_basket_ids)].copy()
+
+    # Identify top X ideas by total voters (within the filtered group)
+    idea_voter_counts = phase_votes.groupby("idea_id").size().reset_index(name="voters")
+    idea_voter_counts = idea_voter_counts.sort_values("voters", ascending=False)
+    top_x_ideas = idea_voter_counts.head(x)
+    top_idea_ids = set(top_x_ideas["idea_id"])
+
+    # Find baskets that voted for at least min_votes top-X ideas
+    votes_in_top = phase_votes[phase_votes["idea_id"].isin(top_idea_ids)]
+    basket_hit_counts = votes_in_top.groupby("basket_id").size()
+    qualifying_baskets = set(basket_hit_counts[basket_hit_counts >= min_votes].index)
+
+    # Build basket→user mapping
+    basket_user = submitted.set_index("id")["user_id"].to_dict()
+    voters_with_match = len({basket_user[bid] for bid in qualifying_baskets if bid in basket_user})
+
+    # Enrich top ideas with titles
+    ideas_df = store.get("gv_ideas", pd.DataFrame())
+    title_map: dict[str, str] = {}
+    if not ideas_df.empty and "id" in ideas_df.columns:
+        for _, row in ideas_df.iterrows():
+            t = row.get("title", "")
+            if isinstance(t, dict):
+                t = t.get("en", str(t))
+            title_map[row["id"]] = _strip_html(str(t)) if t else ""
+
+    top_ideas_list = []
+    for _, row in top_x_ideas.iterrows():
+        top_ideas_list.append({
+            "idea_id": row["idea_id"],
+            "title": title_map.get(row["idea_id"], ""),
+            "voters": int(row["voters"]),
+        })
+
+    coverage_pct = round(voters_with_match / total_voters * 100, 1) if total_voters > 0 else 0.0
+
+    return {
+        "x": x,
+        "min_votes": min_votes,
+        "top_ideas": top_ideas_list,
+        "voters_with_match": voters_with_match,
+        "voters_total": total_voters,
+        "coverage_pct": coverage_pct,
+        "filter_info": {"filters": filters, "filtered_voters": filtered_voters},
+    }
+
+
+def get_available_demographic_groups() -> dict[str, Any]:
+    """Return available demographic dimensions and their distinct groups for the voting population.
+
+    Returns: {"dimensions": {"age_bucket": {"label": "Age", "groups": [...]}, ...}}
+    """
+    submitted = _submitted_baskets()
+    if submitted.empty:
+        return {"dimensions": {dim: {"label": _DIM_LABELS.get(dim, dim), "groups": []} for dim in FILTER_DIMENSIONS}}
+
+    voter_user_ids = submitted["user_id"].dropna().unique().tolist()
+
+    with _cache_lock:
+        _build_email_demo_cache()
+        _build_userid_email_map()
+
+    # Collect distinct values per dimension across all voters
+    dim_values: dict[str, set[str]] = {dim: set() for dim in FILTER_DIMENSIONS}
+    for uid in voter_user_ids:
+        email = _ia._userid_email_map.get(uid)
+        if email:
+            demo = _ia._email_demo_cache.get(email, {})
+            for dim in FILTER_DIMENSIONS:
+                val = demo.get(dim)
+                if val is not None:
+                    dim_values[dim].add(val)
+
+    dimensions: dict[str, Any] = {}
+    for dim in FILTER_DIMENSIONS:
+        dimensions[dim] = {
+            "label": _DIM_LABELS.get(dim, dim),
+            "groups": sorted(dim_values[dim]),
+        }
+
+    return {"dimensions": dimensions}
+
+
 # ── Survey completion counts ─────────────────────────────────────────────
 
 # Cache form titles so we only fetch from Typeform once per process

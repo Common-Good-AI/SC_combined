@@ -8,6 +8,62 @@ const VotingTab = {
       <div v-else-if="error" class="error">{{ error }}</div>
       <template v-else>
 
+        <!-- Demographic "What-If" Filter -->
+        <div data-filter-panel style="background:#1e293b; border-radius:8px; padding:16px 20px; margin-bottom:20px;">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap;">
+            <span style="font-size:0.95rem; font-weight:600; color:#e2e8f0;">What if only these groups voted?</span>
+            <span v-if="filterLoading" style="color:#94a3b8; font-size:0.85rem;">Loading…</span>
+            <button v-if="hasActiveFilters" @click="clearAllFilters"
+                    style="margin-left:auto; background:#4f46e5; color:#fff; border:none; border-radius:4px; padding:4px 12px; font-size:0.8rem; cursor:pointer;">
+              Clear All
+            </button>
+          </div>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <div v-for="(dim, dimKey) in demographicGroups" :key="dimKey"
+                 style="position:relative; flex:1; min-width:160px;">
+              <button @click="toggleDropdown(dimKey)"
+                      :style="{
+                        width: '100%', textAlign: 'left', background: '#0f172a',
+                        color: selectedFilters[dimKey] && selectedFilters[dimKey].length ? '#a5b4fc' : '#e2e8f0',
+                        border: selectedFilters[dimKey] && selectedFilters[dimKey].length ? '1px solid #6366f1' : '1px solid #334155',
+                        borderRadius: '6px', padding: '8px 12px', fontSize: '0.85rem', cursor: 'pointer'
+                      }">
+                {{ dim.label }}
+                <span v-if="selectedFilters[dimKey] && selectedFilters[dimKey].length"
+                      style="background:#6366f1; color:#fff; border-radius:10px; padding:1px 6px; font-size:0.75rem; margin-left:6px;">
+                  {{ selectedFilters[dimKey].length }}
+                </span>
+                <span style="float:right;">▾</span>
+              </button>
+              <div v-if="openDropdown === dimKey"
+                   style="position:absolute; top:100%; left:0; right:0; z-index:50; background:#0f172a; border:1px solid #334155; border-radius:6px; margin-top:4px; max-height:220px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.4);">
+                <label v-for="g in dim.groups" :key="g"
+                       style="display:flex; align-items:center; gap:8px; padding:6px 12px; cursor:pointer; font-size:0.85rem; color:#e2e8f0;"
+                       @mouseenter="$event.target.style.background='#1e293b'"
+                       @mouseleave="$event.target.style.background='transparent'">
+                  <input type="checkbox" :value="g"
+                         :checked="selectedFilters[dimKey] && selectedFilters[dimKey].includes(g)"
+                         @change="toggleFilter(dimKey, g)"
+                         style="accent-color:#6366f1; cursor:pointer;">
+                  {{ g }}
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Active filter banner -->
+        <div v-if="hasActiveFilters && votingData.filter_info"
+             style="background:#312e81; border:1px solid #4f46e5; border-radius:6px; padding:10px 16px; margin-bottom:16px; font-size:0.85rem; color:#c7d2fe; display:flex; align-items:center; flex-wrap:wrap; gap:8px;">
+          <span>Showing results for:</span>
+          <template v-for="(groups, dimKey) in activeFilterSummary" :key="dimKey">
+            <span style="background:#4f46e5; color:#fff; border-radius:4px; padding:2px 8px; font-size:0.8rem;">
+              {{ dimLabel(dimKey) }}: {{ groups.join(', ') }}
+            </span>
+          </template>
+          <span style="margin-left:4px;">— {{ fmt(votingData.filter_info.filtered_voters) }} voters (of {{ fmt(unfilteredTotal) }} total)</span>
+        </div>
+
         <!-- Summary cards -->
         <div class="card-row">
           <div class="card">
@@ -218,6 +274,12 @@ const VotingTab = {
       demoData: null,
       surveyData: null,
       _debounceTimer: null,
+      // Demographic "What-If" multi-filter
+      demographicGroups: {},
+      selectedFilters: {},  // { dimKey: [group1, group2], ... }
+      openDropdown: null,
+      filterLoading: false,
+      unfilteredTotal: 0,
     };
   },
 
@@ -232,6 +294,16 @@ const VotingTab = {
         partial: acc.partial + s.partial,
         total: acc.total + s.total,
       }), { completed: 0, partial: 0, total: 0 });
+    },
+    hasActiveFilters() {
+      return Object.values(this.selectedFilters).some(arr => arr && arr.length > 0);
+    },
+    activeFilterSummary() {
+      const summary = {};
+      for (const [dim, groups] of Object.entries(this.selectedFilters)) {
+        if (groups && groups.length > 0) summary[dim] = groups;
+      }
+      return summary;
     },
   },
 
@@ -249,6 +321,14 @@ const VotingTab = {
   },
 
   async mounted() {
+    // Close dropdown on outside clicks
+    this._outsideClickHandler = (e) => {
+      if (this.openDropdown && !e.target.closest('[data-filter-panel]')) {
+        this.openDropdown = null;
+      }
+    };
+    document.addEventListener('click', this._outsideClickHandler);
+
     try {
       if (this.preloaded.voting) {
         this.votingData = this.preloaded.voting;
@@ -257,18 +337,26 @@ const VotingTab = {
         if (!res.ok) throw new Error('Failed to load voting data');
         this.votingData = await res.json();
       }
+      this.unfilteredTotal = this.votingData.total_voters;
 
-      // Fetch top-X, demographics, and surveys in parallel
+      // Fetch top-X, demographics, surveys, and demographic groups in parallel
       await Promise.all([
         this.fetchTopX(),
         this.fetchDemographics(),
         this.fetchSurveys(),
+        this.fetchDemographicGroups(),
       ]);
 
       this.loading = false;
     } catch (e) {
       this.error = e.message || 'Failed to load voting data';
       this.loading = false;
+    }
+  },
+
+  beforeUnmount() {
+    if (this._outsideClickHandler) {
+      document.removeEventListener('click', this._outsideClickHandler);
     }
   },
 
@@ -296,7 +384,10 @@ const VotingTab = {
     async fetchTopX() {
       this.topXLoading = true;
       try {
-        const res = await fetch(`/api/analytics/voting/top-x?x=${this.topX}&y=${this.minY}`);
+        let url = `/api/analytics/voting/top-x?x=${this.topX}&y=${this.minY}`;
+        const filterQS = this.buildFilterQuery();
+        if (filterQS) url += '&' + filterQS;
+        const res = await fetch(url);
         if (res.ok) this.topXData = await res.json();
       } catch (e) {
         console.error('Top-X fetch error:', e);
@@ -320,6 +411,70 @@ const VotingTab = {
       } catch (e) {
         console.error('Surveys fetch error:', e);
       }
+    },
+
+    async fetchDemographicGroups() {
+      try {
+        const res = await fetch('/api/analytics/voting/demographic-groups');
+        if (res.ok) {
+          const data = await res.json();
+          this.demographicGroups = data.dimensions || {};
+        }
+      } catch (e) {
+        console.error('Demographic groups fetch error:', e);
+      }
+    },
+
+    buildFilterQuery() {
+      const params = new URLSearchParams();
+      for (const [dim, groups] of Object.entries(this.selectedFilters)) {
+        if (groups && groups.length) {
+          for (const g of groups) {
+            params.append(dim, g);
+          }
+        }
+      }
+      return params.toString();
+    },
+
+    toggleDropdown(dimKey) {
+      this.openDropdown = this.openDropdown === dimKey ? null : dimKey;
+    },
+
+    toggleFilter(dimKey, group) {
+      if (!this.selectedFilters[dimKey]) {
+        this.selectedFilters[dimKey] = [];
+      }
+      const idx = this.selectedFilters[dimKey].indexOf(group);
+      if (idx >= 0) {
+        this.selectedFilters[dimKey].splice(idx, 1);
+      } else {
+        this.selectedFilters[dimKey].push(group);
+      }
+      this.applyFilter();
+    },
+
+    clearAllFilters() {
+      for (const dim of Object.keys(this.selectedFilters)) {
+        this.selectedFilters[dim] = [];
+      }
+      this.openDropdown = null;
+      this.applyFilter();
+    },
+
+    async applyFilter() {
+      this.filterLoading = true;
+      try {
+        let url = '/api/analytics/voting';
+        const filterQS = this.buildFilterQuery();
+        if (filterQS) url += '?' + filterQS;
+        const res = await fetch(url);
+        if (res.ok) this.votingData = await res.json();
+        await this.fetchTopX();
+      } catch (e) {
+        console.error('Filter apply error:', e);
+      }
+      this.filterLoading = false;
     },
   },
 };

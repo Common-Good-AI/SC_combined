@@ -1057,31 +1057,156 @@ def build_idea_view(idea_id: str | None = None) -> list[dict[str, Any]] | dict[s
     return results
 
 
-def _build_idea_sub_themes_lookup() -> dict[str, list[dict[str, str]]]:
-    """Build a mapping from idea_id to its list of topics (input topics)."""
+import re as _re
+
+# Descriptions of sub-themes typically start with a question word/phrase.
+_SUBTHEME_DESC_RE = _re.compile(
+    r"^(How |What |In what |Why |Where |Should |Could |When )",
+    _re.IGNORECASE,
+)
+
+# GoVocal doesn't expose parent-child relationships between input topics
+# via the API.  This mapping encodes the known theme → sub-theme structure
+# using topic titles (stable across environments).
+_THEME_TO_SUBTHEMES: dict[str, list[str]] = {
+    "Economy, Taxes & Cost of Living": [
+        "Stagnant Minimum Wage",
+        "Rising Utility Rates and Monopolies",
+        "Burden of Vehicle and Property Taxes",
+    ],
+    "Housing & Real Estate": [
+        "Vulnerability of Senior Housing",
+        "Affordable Housing Shortages",
+        "Corporate Ownership of Mobile Home Parks",
+    ],
+    "Justice, Public Safety & Family Services": [
+        "Mass Incarceration and Sentencing",
+        "Weak Animal Cruelty Penalties",
+        "Foster Care and DSS System Failures",
+        "Family Court Backlogs",
+    ],
+    "Education & Youth Development": [
+        "Special Education Staffing Shortages",
+        "Public Funds for Private Vouchers",
+        "Low Public School Rankings",
+    ],
+    "Environment, Conservation & Land Use": [
+        "Loss of Wetlands and Forests",
+        "Highway Littering and Illegal Dumping",
+        "Rapid Uncontrolled Development",
+    ],
+    "Healthcare & Public Health Access": [
+        "Medical Cannabis Prohibition",
+        "Reproductive Healthcare Restrictions",
+        "Rural Healthcare and Specialist Shortages",
+        "High Health Insurance Premiums",
+    ],
+    "Infrastructure & Transportation": [
+        "Infrastructure Lagging Behind Development",
+        "Lack of Alternative Transportation Options",
+        "Traffic Congestion and Commute Times",
+        "Poor Road Conditions and Potholes",
+    ],
+    "Governance, Elections & Civic Engagement": [
+        "Career Politicians and Term Limits",
+        "Judicial Selection Conflicts of Interest",
+        "Unlimited Corporate Campaign Donations",
+        "Partisan Gerrymandering",
+    ],
+}
+
+
+def _classify_topic(description: str) -> str:
+    """Return 'theme' or 'sub_theme' based on description pattern.
+
+    Themes have declarative descriptions (e.g. 'Issues related to …').
+    Sub-themes have question-format descriptions (e.g. 'How should …').
+    """
+    if _SUBTHEME_DESC_RE.match(description.strip()):
+        return "sub_theme"
+    return "theme"
+
+
+def _build_subtheme_to_theme_map(
+    topic_map: dict[str, dict[str, str]],
+) -> dict[str, dict[str, str]]:
+    """Build a sub-theme-id → parent-theme dict using the known title mapping."""
+    # Invert _THEME_TO_SUBTHEMES: sub-theme title → theme title
+    sub_title_to_theme_title: dict[str, str] = {}
+    for theme_title, sub_titles in _THEME_TO_SUBTHEMES.items():
+        for st in sub_titles:
+            sub_title_to_theme_title[st] = theme_title
+
+    # Build title → topic entry lookup
+    title_to_entry: dict[str, dict[str, str]] = {}
+    for entry in topic_map.values():
+        if entry["type"] == "theme":
+            title_to_entry[entry["title"]] = entry
+
+    sub_to_theme: dict[str, dict[str, str]] = {}
+    for entry in topic_map.values():
+        if entry["type"] != "sub_theme":
+            continue
+        parent_title = sub_title_to_theme_title.get(entry["title"])
+        if parent_title:
+            parent = title_to_entry.get(parent_title)
+            if parent:
+                sub_to_theme[entry["id"]] = parent
+
+    return sub_to_theme
+
+
+def _build_idea_sub_themes_lookup() -> dict[str, dict[str, list[dict[str, str]]]]:
+    """Build a mapping from idea_id to its themes and sub-themes.
+
+    GoVocal often tags ideas only with a sub-theme.  This function
+    automatically infers the parent theme for each sub-theme and ensures
+    every idea that has a sub-theme also gets the corresponding theme.
+
+    Returns ``{idea_id: {"themes": [...], "sub_themes": [...]}}``.
+    """
     join_df = store.get("gv_ideas_input_topics", pd.DataFrame())
     topics_df = store.get("gv_input_topics", pd.DataFrame())
 
     if join_df.empty or "idea_id" not in join_df.columns or "input_topic_id" not in join_df.columns:
         return {}
 
-    # Build topic id → {id, title, description} lookup
+    # Build topic id → {id, title, description, type} lookup
     topic_map: dict[str, dict[str, str]] = {}
     if not topics_df.empty and "id" in topics_df.columns and "title" in topics_df.columns:
         for _, row in topics_df.iterrows():
             tid = str(row["id"])
+            desc = str(row.get("description", "") or "")
             topic_map[tid] = {
                 "id": tid,
                 "title": str(row["title"]),
-                "description": str(row.get("description", "") or ""),
+                "description": desc,
+                "type": _classify_topic(desc),
             }
 
-    lookup: dict[str, list[dict[str, str]]] = {}
+    # Build sub-theme → parent theme mapping
+    sub_to_theme = _build_subtheme_to_theme_map(topic_map)
+
+    lookup: dict[str, dict[str, list[dict[str, str]]]] = {}
     for _, row in join_df.iterrows():
         iid = str(row["idea_id"])
         tid = str(row["input_topic_id"])
-        entry = topic_map.get(tid, {"id": tid, "title": tid, "description": ""})
-        lookup.setdefault(iid, []).append(entry)
+        entry = topic_map.get(tid, {"id": tid, "title": tid, "description": "", "type": "sub_theme"})
+        bucket = lookup.setdefault(iid, {"themes": [], "sub_themes": []})
+        if entry["type"] == "theme":
+            bucket["themes"].append(entry)
+        else:
+            bucket["sub_themes"].append(entry)
+
+    # Auto-populate parent themes for ideas that only have sub-themes
+    for iid, bucket in lookup.items():
+        if bucket["sub_themes"]:
+            existing_theme_ids = {t["id"] for t in bucket["themes"]}
+            for sub in bucket["sub_themes"]:
+                parent = sub_to_theme.get(sub["id"])
+                if parent and parent["id"] not in existing_theme_ids:
+                    bucket["themes"].append(parent)
+                    existing_theme_ids.add(parent["id"])
 
     return lookup
 
@@ -1089,7 +1214,7 @@ def _build_idea_sub_themes_lookup() -> dict[str, list[dict[str, str]]]:
 def _build_single_idea(
     idea_row: pd.Series,
     reactions_df: pd.DataFrame,
-    idea_sub_themes: dict[str, list[dict[str, str]]] | None = None,
+    idea_sub_themes: dict[str, dict[str, list[dict[str, str]]]] | None = None,
 ) -> dict[str, Any]:
     """Build the unified view for a single idea."""
     idea_id = str(idea_row.get("id", ""))
@@ -1126,7 +1251,7 @@ def _build_single_idea(
         title = title.get("en", title.get("", str(title)))
 
     # Input topics (AI-generated tags from GoVocal)
-    topics = (idea_sub_themes or {}).get(idea_id, [])
+    topic_data = (idea_sub_themes or {}).get(idea_id, {"themes": [], "sub_themes": []})
 
     return {
         "idea_id": idea_id,
@@ -1134,7 +1259,7 @@ def _build_single_idea(
         "body": body_text,
         "project_id": _clean_val(idea_row.get("project_id")),
         "created_at": _clean_val(idea_row.get("created_at")),
-        "topics": topics,
+        "topics": topic_data,
         "author_demographics": author_demo,
         "reactions": {
             "total": total,

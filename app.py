@@ -411,16 +411,44 @@ def analytics_demographic_coverage():
 
 # ── Voting analytics routes ──────────────────────────────────────────────
 
+_VOTING_FILTER_DIMS = {"age_bucket", "race", "political_lean", "region"}
+
+
+def _parse_demographic_filters() -> dict[str, list[str]]:
+    """Extract demographic filter params from the request query string.
+
+    Supports repeated keys: ?age_bucket=18-29&age_bucket=30-39&race=Black
+    Returns a dict of {dimension: [groups]} for known dimensions only.
+    """
+    filters: dict[str, list[str]] = {}
+    for dim in _VOTING_FILTER_DIMS:
+        values = request.args.getlist(dim)
+        if values:
+            filters[dim] = values
+    return filters
+
 
 @app.route("/api/analytics/voting")
 def analytics_voting():
-    """Issue vote percentages for the voting phase."""
+    """Issue vote percentages for the voting phase.
+
+    Optional query params for demographic filtering (can combine multiple):
+      - age_bucket, race, political_lean, region (repeatable per dimension)
+    Example: ?race=Black&age_bucket=18-29&age_bucket=30-39
+    """
+    filters = _parse_demographic_filters()
+    if filters:
+        return jsonify(voting_analytics.compute_voting_results_filtered(filters))
     return jsonify(voting_analytics.compute_voting_results())
 
 
 @app.route("/api/analytics/voting/top-x")
 def analytics_voting_top_x():
-    """Coverage: what % of voters have at least Y votes in top X issues."""
+    """Coverage: what % of voters have at least Y votes in top X issues.
+
+    Optional query params for demographic filtering (can combine multiple):
+      - age_bucket, race, political_lean, region (repeatable per dimension)
+    """
     try:
         x = max(1, int(request.args.get("x", "6")))
     except (ValueError, TypeError):
@@ -429,7 +457,16 @@ def analytics_voting_top_x():
         y = max(1, int(request.args.get("y", "1")))
     except (ValueError, TypeError):
         y = 1
+    filters = _parse_demographic_filters()
+    if filters:
+        return jsonify(voting_analytics.compute_top_x_coverage_filtered(x, min_votes=y, filters=filters))
     return jsonify(voting_analytics.compute_top_x_coverage(x, min_votes=y))
+
+
+@app.route("/api/analytics/voting/demographic-groups")
+def analytics_voting_demographic_groups():
+    """Available demographic dimensions and groups for the voting population."""
+    return jsonify(voting_analytics.get_available_demographic_groups())
 
 
 @app.route("/api/analytics/voting/demographics")

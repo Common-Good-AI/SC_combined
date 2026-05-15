@@ -575,6 +575,31 @@ tr.clickable:hover td { background: rgba(194,223,237,.18); }
   font-style: italic;
 }
 
+/* ── Topic chips ──────────────────────────────────────────────────── */
+.topic-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+.topic-chip {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: default;
+}
+.topic-chip-theme {
+  background: var(--navy);
+  color: #fff;
+}
+.topic-chip-sub {
+  background: var(--grey-50);
+  color: var(--navy);
+  border: 1px solid var(--grey-200);
+}
+
 .author-approval {
   background: var(--grey-50);
   border: 1px solid var(--grey-100);

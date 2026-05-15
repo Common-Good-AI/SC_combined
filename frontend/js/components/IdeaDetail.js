@@ -25,6 +25,18 @@ const IdeaDetail = {
 
           <p class="detail-body" v-if="idea.body">{{ idea.body }}</p>
 
+          <!-- Topics -->
+          <div v-if="hasTopics" class="topic-chips-container">
+            <div v-for="theme in (idea.topics.themes || [])" :key="theme.id" class="topic-chip topic-chip-theme"
+                 :title="theme.description">
+              {{ theme.title }}
+            </div>
+            <div v-for="sub in (idea.topics.sub_themes || [])" :key="sub.id" class="topic-chip topic-chip-sub"
+                 :title="sub.description">
+              {{ sub.title }}
+            </div>
+          </div>
+
           <!-- Stats row -->
           <div class="stat-grid">
             <div class="stat-card">
@@ -198,6 +210,10 @@ const IdeaDetail = {
           : (this.idea.bridging.wmga_per_dimension_no_penalty || {});
       }
       return this.idea.bridging.per_dimension_scores || {};
+    },
+    hasTopics() {
+      if (!this.idea?.topics) return false;
+      return (this.idea.topics.themes?.length || 0) + (this.idea.topics.sub_themes?.length || 0) > 0;
     },
     formattedDate() {
       if (!this.idea?.created_at) return null;
